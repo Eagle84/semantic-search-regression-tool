@@ -70,11 +70,48 @@ h2 {
 }
 
 .results-card {
-    height: calc(100vh - 120px);
-    display: flex;
-    flex-direction: column;
-    position: sticky;
-    top: 20px;
+    height: 45vh;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.debug-card {
+    height: 35vh;
+    overflow: hidden;
+}
+
+.results, .debug {
+    height: calc(100% - 40px);
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.debug pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: monospace;
+    font-size: 14px;
+    color: #555;
+}
+
+/* Highlight debug information */
+.debug-section {
+    background-color: #f8f9fa;
+    border-left: 3px solid #6c757d;
+    padding: 8px;
+    margin-bottom: 10px;
+}
+
+.debug-title {
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+.debug-content {
+    color: #6c757d;
+    font-family: monospace;
 }
 
 .form-group {
