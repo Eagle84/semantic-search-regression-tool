@@ -21,7 +21,7 @@ A web-based tool for testing and evaluating GPT model responses to semantic sear
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/semantic-search-regression-tool.git
+   git clone https://github.com/Eagle84/semantic-search-regression-tool.git
    ```
 
 2. Open `semantic-search-regression-tool.html` in your web browser
