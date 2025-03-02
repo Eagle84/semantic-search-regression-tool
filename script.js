@@ -108,10 +108,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Update debug info if we're displaying finder results
+        // Update debug info only if we're displaying finder results
         const activeTab = document.querySelector('.tab.active').getAttribute('data-tab');
         if (activeTab === 'finder') {
             updateDebugInfo(results);
+        } else {
+            // Clear debug info for other tabs
+            document.getElementById('debug-output').innerHTML = '';
         }
         
         resultsArray.forEach((result, index) => {
@@ -172,10 +175,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 formattedOutput += `FINDER RESULTS:\n`;
                 formattedOutput += `FINDER URL: <a href="${result.finderUrl}" target="_blank">${result.finderUrl}</a>\n`;
                 
-                // Add debugger here
-                debugger;
-                console.log("Displaying company count:", result.totalCompanies);
-                
                 if (result.totalCompanies) {
                     formattedOutput += `Total Companies: ${result.totalCompanies}\n\n`;
                 } else if (result.retryAttempts && result.retryAttempts.length > 0) {
@@ -206,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to update the success rate chart
-    function updateSuccessChart(successCount, failureCount) {
+    function updateSuccessChart(successCount, failureCount, identicalResponses = false) {
         const chartContainer = document.getElementById('chart-container');
         const ctx = document.getElementById('success-chart').getContext('2d');
         
@@ -220,11 +219,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const successPercent = total > 0 ? Math.round((successCount / total) * 100) : 0;
         const failurePercent = total > 0 ? Math.round((failureCount / total) * 100) : 0;
         
+        // Create labels based on whether responses are identical
+        let successLabel = `Valid JSON (${successCount})`;
+        let failureLabel = `Invalid JSON (${failureCount})`;
+        
+        if (identicalResponses && total > 1) {
+            successLabel = `Valid JSON (${successCount}) - Identical`;
+            failureLabel = `Invalid JSON (${failureCount}) - Identical`;
+        }
+        
         // Create new chart
         successChart = new Chart(ctx, {
             type: 'pie',
             data: {
-                labels: [`Success (${successPercent}%)`, `Failure (${failurePercent}%)`],
+                labels: [successLabel, failureLabel],
                 datasets: [{
                     data: [successCount, failureCount],
                     backgroundColor: [
@@ -255,7 +263,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             label: function(context) {
                                 const label = context.label || '';
                                 const value = context.raw || 0;
-                                return `${label}: ${value} (${value === successCount ? successPercent : failurePercent}%)`;
+                                const percent = value === successCount ? successPercent : failurePercent;
+                                return `${label}: ${value} (${percent}%)`;
                             }
                         }
                     }
@@ -321,6 +330,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             let successCount = 0;
             let failureCount = 0;
+            let responses = [];
             
             for (let i = 0; i < iterations; i++) {
                 const result = await runGptQuery(apiKey, systemPrompt, question, config);
@@ -329,6 +339,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     question,
                     response: result.content
                 });
+                
+                // Store response for comparison
+                responses.push(result.content);
                 
                 // Check if the result is successful
                 if (isSuccessfulResult(singleResults[singleResults.length - 1])) {
@@ -340,11 +353,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update results in real-time
                 displayFormattedResults(singleResults, false);
                 
+                // Check if responses are identical
+                const areIdentical = iterations > 1 && responses.every(r => r === responses[0]);
+                
                 // Update the chart
-                updateSuccessChart(successCount, failureCount);
+                updateSuccessChart(successCount, failureCount, areIdentical);
             }
             
+            // Final check for identical responses
+            const areAllResponsesIdentical = iterations > 1 && responses.every(r => r === responses[0]);
+            
+            if (areAllResponsesIdentical) {
+                showStatus('single-status', 'Test completed successfully! All responses are identical.', 'success');
+            } else {
             showStatus('single-status', 'Test completed successfully!', 'success');
+            }
         } catch (error) {
             showStatus('single-status', `Error: ${error.message}`, 'error');
         }
@@ -835,11 +858,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
-        // Add company name if available
-        if (searchParams.searchname) {
-            formattedResponse.searchname = searchParams.searchname;
-        }
-        
         // Add sector classification if available
         if (searchParams.sectorclassification) {
             formattedResponse.sectorclassification = searchParams.sectorclassification;
@@ -943,6 +961,21 @@ document.addEventListener('DOMContentLoaded', function() {
                             .trim();
                     }
                 }
+            },
+            // Add exclusion patterns
+            exclusions: {
+                patterns: [
+                    { regex: /\bnot including\s+(\w+)\b/i, group: 1 },
+                    { regex: /\bexcluding\s+(\w+)\b/i, group: 1 },
+                    { regex: /\bexcept\s+(\w+)\b/i, group: 1 },
+                    { regex: /\bnot\s+(\w+)\b/i, group: 1 }
+                ]
+            },
+            // Add climate tech detection
+            climatetech: {
+                patterns: [
+                    { regex: /\b(climate|green|sustainability|sustainable|clean energy)\b/i, value: 'Climate Tech' }
+                ]
             }
         };
         
@@ -1058,6 +1091,23 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (searchname) {
                     params.searchname = searchname;
                 }
+            }
+        }
+        
+        // Process climate tech if mentioned
+        for (const pattern of FILTER_SCHEMA.climatetech.patterns) {
+            if (pattern.regex.test(question)) {
+                params.sectorclassification = pattern.value;
+                break;
+            }
+        }
+        
+        // Process exclusions
+        for (const pattern of FILTER_SCHEMA.exclusions.patterns) {
+            const match = question.match(pattern.regex);
+            if (match && match[pattern.group]) {
+                params.excludetags = match[pattern.group].trim().toLowerCase();
+                break;
             }
         }
         
@@ -1346,10 +1396,23 @@ document.addEventListener('DOMContentLoaded', function() {
         const baseUrl = 'https://qatesting.findersnc.com/startups/search';
         const urlParams = new URLSearchParams();
         
-        // Add all fields from the JSON response to the URL
+        // Map JSON response fields to URL parameters
+        const paramMapping = {
+            'lowerFoundedYear': 'founded_after',
+            'upperFoundedYear': 'founded_before',
+            'searchname': 'searchname',
+            'sectorclassification': 'sectorclassification',
+            'location': 'location',
+            'fundingstages': 'fundingstages',
+            'alltags': 'alltags'
+        };
+        
+        // Add all fields from the JSON response to the URL using the correct parameter names
         Object.entries(jsonResponse).forEach(([key, value]) => {
             if (value !== undefined && value !== null) {
-                urlParams.append(key, value);
+                // Use the mapped parameter name if available, otherwise use the key directly
+                const paramName = paramMapping[key] || key;
+                urlParams.append(paramName, value);
             }
         });
         
