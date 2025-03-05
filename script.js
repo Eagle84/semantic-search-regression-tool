@@ -841,86 +841,52 @@ You:
                     url: url,
                     count: 0,
                     success: false,
-                    error: "Invalid URL provided",
-                    steps: ["Error: No URL provided to fetchCompanyCount"]
+                    error: "Invalid URL provided"
                 };
             }
             
-            // Log URL components for debugging
-            console.log("URL details:", {
-                fullUrl: url,
-                urlParams: url.includes('?') ? url.split('?')[1] : 'No parameters',
-                baseUrl: url.split('?')[0]
+            console.log(`Fetching count from URL via server API: ${url}`);
+            
+            // Call our server API instead of fetching directly
+            const response = await fetch('/api/fetch-count', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ url })
             });
             
-            // Extract entity type from URL (investors or companies)
-            const entityType = url.includes('/investors/') ? 'investors' : 'companies';
-            
-            // Store the URL for result object
-            const requestUrl = url;
-            
-            // Add steps to track the request
-            const steps = [];
-            steps.push(`Fetching count from URL: ${url}`);
-            
-            // Due to CORS restrictions in the browser, we'll use simulated data for now
-            // In a real environment, this should be handled server-side or with proper CORS headers
-            
-            // Extract parameters from URL for debugging
-            const urlParams = new URLSearchParams(url.includes('?') ? url.split('?')[1] : '');
-            const paramMap = {};
-            for (const [key, value] of urlParams.entries()) {
-                if (paramMap[key]) {
-                    if (Array.isArray(paramMap[key])) {
-                        paramMap[key].push(value);
-                    } else {
-                        paramMap[key] = [paramMap[key], value];
-                    }
-                } else {
-                    paramMap[key] = value;
-                }
+            if (!response.ok) {
+                throw new Error(`API error! status: ${response.status}`);
             }
             
-            steps.push(`URL Parameters: ${JSON.stringify(paramMap)}`);
-            steps.push(`Using simulated data due to CORS restrictions`);
+            const result = await response.json();
             
-            // Simulate different counts based on parameters to mimic real behavior
-            let simulatedCount = 27; // Default
-            
-            // Adjust count based on parameters (this is just for simulation)
-            if (Object.keys(paramMap).length > 3) {
-                simulatedCount = 12; // Fewer results for more specific queries
+            if (result.success) {
+                console.log(`API returned count: ${result.count}`);
+                return {
+                    url: url,
+                    count: result.count,
+                    success: true,
+                    elementText: result.elementText
+                };
+            } else {
+                console.warn(`API error: ${result.error}`);
+                return {
+                    url: url,
+                    count: 0,
+                    success: false,
+                    error: result.error || 'Unknown error from API'
+                };
             }
-            if (Object.keys(paramMap).length > 5) {
-                simulatedCount = 5; // Even fewer results for very specific queries
-            }
-            
-            // For empty or minimal queries, return more results
-            if (Object.keys(paramMap).length <= 1) {
-                simulatedCount = 50;
-            }
-            
-            return {
-                url: requestUrl,
-                count: simulatedCount,
-                success: true,
-                simulated: true,
-                elementText: simulatedCount.toString(),
-                matchPattern: 'simulated (CORS restrictions)',
-                entityType: entityType,
-                steps: steps,
-                urlParams: paramMap,
-                note: "Using simulated count due to CORS restrictions. In a real environment, this would be a server-side call or use proper CORS headers."
-            };
             
         } catch (error) {
-            console.error("Error in fetchCompanyCount:", error);
+            console.error("Error fetching count:", error);
             return {
                 url: url,
                 count: 0,
                 success: false,
-                error: error.message || 'Unknown error occurred',
-                steps: [`Fatal error in fetchCompanyCount: ${error.message}`]
+                error: error.message || 'Error fetching count'
             };
         }
     }
@@ -1262,23 +1228,26 @@ You:
         displayFormattedResults(finderResults, false);
         
         try {
-            // Determine which prompt to use based on the question
-            const promptType = isInvestorQuestion(question) ? 'investor' : 'startup';
-            const systemPrompt = getSystemPromptForQuestion(question);
+            // Determine prompt type (investor or startup) based on the question
+            const promptType = determinePromptType(question);
             
-            console.log(`Using ${promptType} prompt for question: ${question}`);
+            // Get the appropriate system prompt based on the prompt type
+            const systemPrompt = getFinderSystemPrompt(promptType);
             
-            // Call OpenAI API to get JSON parameters
-            const result = await runGptQuery(apiKey, systemPrompt, question, config);
+            // Call OpenAI to get the JSON parameters
+            const result = await runGptQuery(
+                apiKey,
+                systemPrompt,
+                question,
+                config
+            );
             
-            console.log("OpenAI response:", result);
+            console.log("OpenAI response for Finder:", result);
             
-            // Extract JSON from the response and implement the rest of the function
-            // Extract JSON from the response
             let jsonResponse = null;
             let description = '';
             
-            if (typeof result.content === 'string') {
+            if (result && result.content) {
                 // Try to extract JSON from markdown code blocks
                 const jsonMatch = result.content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
                 if (jsonMatch && jsonMatch[1]) {
@@ -1301,46 +1270,18 @@ You:
                         showStatus('finder-status', 'Error parsing JSON from response', 'error');
                         return;
                     }
-                } else {
-                    // If no code blocks, try to parse the entire content as JSON
-                    try {
-                        jsonResponse = JSON.parse(result.content);
-                        
-                        // Extract description if available
-                        if (jsonResponse.description) {
-                            description = jsonResponse.description;
-                            delete jsonResponse.description;
-                        }
-                        
-                        // Extract unsupported fields if available
-                        if (jsonResponse.unsupported) {
-                            description += jsonResponse.unsupported ? `\n\nUnsupported fields: ${jsonResponse.unsupported}` : '';
-                            delete jsonResponse.unsupported;
-                        }
-                    } catch (e) {
-                        console.warn('Could not parse JSON from entire response:', e);
-                        showStatus('finder-status', 'Response does not contain valid JSON', 'error');
-                        return;
-                    }
                 }
             }
             
             if (!jsonResponse) {
-                showStatus('finder-status', 'No valid JSON parameters found in the response', 'error');
+                showStatus('finder-status', 'Could not extract valid JSON from the GPT response', 'error');
                 return;
             }
-            
-            console.log("Extracted JSON parameters:", jsonResponse);
-            
-            // Generate a Finder URL based on the JSON parameters
-            const finderUrl = generateFinderUrlFromJsonResponse(jsonResponse, promptType);
-            console.log("Generated Finder URL:", finderUrl);
             
             // Debug information for the search parameters
             if (jsonResponse) {
                 const debugInfo = {
                     jsonParameters: jsonResponse,
-                    generatedUrl: finderUrl,
                     promptType: promptType
                 };
                 console.log("Debug info for Finder search:", debugInfo);
@@ -1354,9 +1295,71 @@ You:
                 }
             }
             
-            // Fetch company/investor count from the Finder URL
-            const totalCompaniesObj = await fetchCompanyCount(finderUrl);
-            console.log("Fetch result:", totalCompaniesObj);
+            // NEW: Use the server API to generate URL and fetch count in one step
+            showStatus('finder-status', '<div class="spinner"></div> Fetching results from server...', 'info');
+            
+            let serverResponse;
+            try {
+                // Call the server API to generate URL and fetch count
+                const response = await fetch('/api/finder-search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        jsonParams: jsonResponse,
+                        promptType: promptType
+                    })
+                });
+                
+                serverResponse = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(serverResponse.error || 'Failed to fetch results from server');
+                }
+                
+                console.log("Server response:", serverResponse);
+                
+                // Update debug info with the generated URL
+                const debugPanel = document.getElementById('finder-status');
+                if (debugPanel) {
+                    debugPanel.innerHTML += '<div class="debug-info"><p>Generated URL: <a href="' + 
+                        serverResponse.generatedUrl + '" target="_blank">' + 
+                        serverResponse.generatedUrl + '</a></p><hr></div>';
+                }
+                
+            } catch (error) {
+                console.error("Error calling server API:", error);
+                showStatus('finder-status', `Error calling server API: ${error.message}`, 'error');
+                
+                // Create a basic totalCompaniesObj with error information
+                const totalCompaniesObj = {
+                    url: "Error generating URL",
+                    count: 0,
+                    success: false,
+                    error: error.message
+                };
+                
+                // Format and display results with error
+                const formattedResult = formatFinderResponseToMatchSingle(
+                    jsonResponse, 
+                    description, 
+                    totalCompaniesObj, 
+                    promptType
+                );
+                
+                finderResults.push(formattedResult);
+                displayFormattedResults(finderResults, false);
+                return;
+            }
+            
+            // Create a totalCompaniesObj from the server response
+            const totalCompaniesObj = {
+                url: serverResponse.generatedUrl,
+                count: serverResponse.count || 0,
+                success: serverResponse.success,
+                elementText: serverResponse.elementText
+            };
             
             // Format and display the results
             const formattedResult = formatFinderResponseToMatchSingle(
@@ -1620,4 +1623,130 @@ You:
         
         return stage;
     }
+
+    // Function to determine the prompt type based on the question
+    function determinePromptType(question) {
+        return isInvestorQuestion(question) ? 'investor' : 'startup';
+    }
+
+    // Function to get the appropriate system prompt for finder searches
+    function getFinderSystemPrompt(promptType) {
+        // Add null checks before accessing value properties
+        const startupPromptElement = document.getElementById('startup-system-prompt');
+        const investorPromptElement = document.getElementById('investor-system-prompt');
+        
+        let startupPrompt = startupPromptElement ? startupPromptElement.value : getDefaultStartupPrompt();
+        let investorPrompt = investorPromptElement ? investorPromptElement.value : getDefaultInvestorPrompt();
+        
+        // Ensure prompts are not empty
+        if (!startupPrompt || startupPrompt.trim() === '') {
+            console.log('Using default startup prompt because the current one is empty');
+            startupPrompt = getDefaultStartupPrompt();
+        }
+        
+        if (!investorPrompt || investorPrompt.trim() === '') {
+            console.log('Using default investor prompt because the current one is empty');
+            investorPrompt = getDefaultInvestorPrompt();
+        }
+        
+        // Return the appropriate prompt based on type
+        if (promptType === 'investor') {
+            console.log('Using investor prompt for finder search');
+            return investorPrompt;
+        } else {
+            console.log('Using startup prompt for finder search');
+            return startupPrompt;
+        }
+    }
+
+    // Function to check if the server is running
+    function checkServerConnection() {
+        fetch('/api/health-check')
+            .then(response => {
+                if (response.ok) {
+                    console.log('Server connection successful');
+                } else {
+                    showServerWarning();
+                }
+            })
+            .catch(error => {
+                console.error('Server connection error:', error);
+                showServerWarning();
+            });
+    }
+
+    // Function to show server warning
+    function showServerWarning() {
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'server-warning';
+        warningDiv.innerHTML = `
+            <div class="warning-content">
+                <h3>⚠️ Server Not Running</h3>
+                <p>The Node.js server required for fetching accurate company counts is not running.</p>
+                <p>To start the server:</p>
+                <ol>
+                    <li>Open a terminal/command prompt</li>
+                    <li>Navigate to the project directory</li>
+                    <li>Run <code>npm install</code> (first time only)</li>
+                    <li>Run <code>npm run server</code></li>
+                </ol>
+                <p>Refer to the <code>SERVER_README.md</code> file for more details.</p>
+                <button id="close-warning">Close</button>
+            </div>
+        `;
+        
+        document.body.appendChild(warningDiv);
+        
+        // Add style for the warning
+        const style = document.createElement('style');
+        style.textContent = `
+            .server-warning {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(0, 0, 0, 0.7);
+                z-index: 9999;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            .warning-content {
+                background-color: white;
+                padding: 20px;
+                border-radius: 5px;
+                max-width: 500px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            }
+            .warning-content h3 {
+                color: #e74c3c;
+                margin-top: 0;
+            }
+            .warning-content code {
+                background-color: #f5f5f5;
+                padding: 2px 4px;
+                border-radius: 3px;
+                font-family: monospace;
+            }
+            #close-warning {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                padding: 8px 12px;
+                border-radius: 3px;
+                cursor: pointer;
+                margin-top: 10px;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Add close button handler
+        document.getElementById('close-warning').addEventListener('click', () => {
+            warningDiv.remove();
+        });
+    }
+
+    // Check server connection when page loads
+    checkServerConnection();
 });
