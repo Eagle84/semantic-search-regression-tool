@@ -1768,17 +1768,12 @@ You:
 
     // Add a function to check and fix the system prompt containers
     function checkAndFixSystemPromptContainers() {
-        console.log('Checking system prompt containers');
-        
         // Check if the startup and investor system prompts exist
         const startupPrompt = document.getElementById('startup-system-prompt');
         const investorPrompt = document.getElementById('investor-system-prompt');
         
         if (!startupPrompt || !investorPrompt) {
-            console.log('System prompt containers missing, recreating them');
             createSystemPromptInputs();
-        } else {
-            console.log('System prompt containers found');
         }
     }
 });
