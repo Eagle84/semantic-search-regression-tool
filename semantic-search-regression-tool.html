@@ -36,7 +36,6 @@
             
             <div class="tabs">
                 <div class="tab active" data-tab="single">Single Test</div>
-                <div class="tab" data-tab="batch">Batch Test</div>
                 <div class="tab" data-tab="finder">Finder Search</div>
                 <div class="tab" data-tab="config">Configuration</div>
             </div>
@@ -54,16 +53,11 @@
                 <div id="single-status" class="status hidden"></div>
             </div>
             
-            <div id="batch-tab" class="tab-content">
-                <div class="input-group">
-                    <label for="batch-questions">Questions (one per line):</label>
-                    <textarea id="batch-questions" rows="10" placeholder="Enter your questions here, one per line..."></textarea>
-                </div>
-                <button id="run-batch" class="btn primary-button">Run Batch Test</button>
-                <div id="batch-status" class="status hidden"></div>
-            </div>
-            
             <div id="finder-tab" class="tab-content">
+                <div class="server-notice" style="background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 5px; padding: 10px; margin-bottom: 15px;">
+                    <p style="margin: 0; color: #856404;"><strong>⚠️ Note:</strong> The Finder Search functionality requires a Node.js server to be running locally.</p>
+                    <p style="margin: 5px 0 0 0; color: #856404;">See <code>SERVER_README.md</code> for setup instructions.</p>
+                </div>
                 <div class="input-group">
                     <label for="finder-question">Question:</label>
                     <textarea id="finder-question" placeholder="Enter your question here..."></textarea>

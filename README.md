@@ -4,11 +4,9 @@ A web-based tool for testing and evaluating GPT model responses to semantic sear
 
 ## Features
 
-- **Single Question Testing**: Test individual queries with multiple iterations to evaluate consistency
-- **Batch Testing**: Run multiple queries in sequence to test a variety of scenarios
-- **Finder Search Integration**: Simulate integration with a company finder search tool
-- **Visual Success Rate**: View success/failure rates with an interactive pie chart
-- **Configuration Management**: Easily configure API keys, system prompts, and model parameters
+- **Single Testing**: Run individual queries to test specific scenarios
+- **Finder Search**: Test queries that generate Finder URLs and validate result counts
+- **Configuration**: Customize model parameters and system prompts
 
 ## Getting Started
 
@@ -30,27 +28,18 @@ A web-based tool for testing and evaluating GPT model responses to semantic sear
 
 ### Usage
 
-#### Single Question Testing
+#### Single Testing
 
-1. Navigate to the "Single Question" tab
-2. Enter your query in the text area
-3. Set the number of iterations (default: 1)
+1. Navigate to the "Single Test" tab
+2. Enter your question in the text area
+3. Set the number of iterations (for consistency testing)
 4. Click "Run Test"
-5. View the results and success rate chart
-
-#### Batch Testing
-
-1. Navigate to the "Batch Questions" tab
-2. Enter multiple queries, one per line
-3. Click "Run Batch Test"
-4. View the results for each query
 
 #### Finder Search
 
 1. Navigate to the "Finder Search" tab
-2. Enter a query related to company search
-3. Click "Search Finder"
-4. View the structured results and filter description
+2. Enter your question in the text area
+3. Click "Run Finder Search"
 
 ## Configuration
 

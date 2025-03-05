@@ -1,4 +1,13 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Polyfill for AbortSignal.timeout if not supported
+    if (!AbortSignal.timeout) {
+        AbortSignal.timeout = function timeout(ms) {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(new DOMException('TimeoutError', 'Timeout')), ms);
+            return controller.signal;
+        };
+    }
+    
     // Initialize UI elements
     const apiKeyInput = document.getElementById('api-key');
     // Remove reference to the standalone system prompt
@@ -113,15 +122,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelector('.container') || document.body.appendChild(singleTab);
         }
         
-        // Check if batch tab exists
-        let batchTab = document.getElementById('batch-tab');
-        if (!batchTab) {
-            batchTab = document.createElement('div');
-            batchTab.id = 'batch-tab';
-            batchTab.className = 'tab-content';
-            document.querySelector('.container') || document.body.appendChild(batchTab);
-        }
-        
         // Check if finder tab exists
         let finderTab = document.getElementById('finder-tab');
         if (!finderTab) {
@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Check for status elements
-        ['single-status', 'batch-status', 'finder-status', 'config-status'].forEach(id => {
+        ['single-status', 'finder-status', 'config-status'].forEach(id => {
             if (!document.getElementById(id)) {
                 const statusElement = document.createElement('div');
                 statusElement.id = id;
@@ -175,9 +175,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Store results separately for single, batch, and finder tests
+    // Store results separately for single and finder tests
     let singleResults = [];
-    let batchResults = [];
     let finderResults = [];
     
     // Tab switching
@@ -220,8 +219,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Update results based on active tab
                 if (tabId === 'single') {
                     displayFormattedResults(singleResults, false);
-                } else if (tabId === 'batch') {
-                    displayFormattedResults(batchResults, true);
                 } else if (tabId === 'finder') {
                     displayFormattedResults(finderResults, false);
                 }
@@ -393,17 +390,18 @@ document.addEventListener('DOMContentLoaded', function() {
             investorPrompt = getDefaultInvestorPrompt();
         }
         
-        // Log which prompt is being used
-        if (promptMode === 'auto') {
+        // If user has selected a specific prompt type, use that without checking question content
+        if (promptMode === 'investor') {
+            console.log('Using investor prompt based on user selection');
+            return investorPrompt;
+        } else if (promptMode === 'startup') {
+            console.log('Using startup prompt based on user selection');
+            return startupPrompt;
+        } else {
+            // Auto-detect based on question content
             const isInvestor = isInvestorQuestion(question);
             console.log(`Auto-detected question type: ${isInvestor ? 'investor' : 'startup'}`);
             return isInvestor ? investorPrompt : startupPrompt;
-        } else if (promptMode === 'investor') {
-            console.log('Using investor prompt based on user selection');
-            return investorPrompt;
-        } else {
-            console.log('Using startup prompt based on user selection');
-            return startupPrompt;
         }
     }
     
@@ -479,707 +477,6 @@ You:
 }`;
     }
     
-    // Function to display formatted results
-    function displayFormattedResults(results, isBatch = false) {
-        const resultsOutput = document.getElementById('results-output');
-        const resultsContainer = document.getElementById('results-container');
-        const placeholder = document.getElementById('placeholder-message');
-        
-        if (!resultsOutput || !resultsContainer || !placeholder) {
-            return;
-        }
-        
-        // Show or hide the results and placeholder based on whether we have results
-        if (results && results.length > 0) {
-            resultsContainer.classList.remove('hidden');
-            placeholder.style.display = 'none';
-        } else {
-            resultsContainer.classList.add('hidden');
-            placeholder.style.display = 'flex';
-            return; // No need to proceed further
-        }
-        
-        // Format the results
-        let formattedResults = '';
-        
-        // Check if results is an array, if not convert it to an array for consistent handling
-        const resultsArray = Array.isArray(results) ? results : [results];
-        
-        resultsArray.forEach((result, index) => {
-            // Format the output
-            formattedResults += `<div class="result-item">`;
-            
-            // Add question and prompt type in a header section
-            formattedResults += `<div class="result-header">`;
-            formattedResults += `<h3>Question ${index + 1}</h3>`;
-            if (result.promptType) {
-                const displayType = result.promptType.charAt(0).toUpperCase() + result.promptType.slice(1);
-                formattedResults += `<div class="prompt-type">${displayType}</div>`;
-            }
-            formattedResults += `</div>`;
-            
-            formattedResults += `<p class="question-text">${result.question}</p>`;
-            
-            // Add description separately if available
-            if (result.description) {
-                formattedResults += `<div class="description"><strong>Description:</strong><br>${result.description}</div>`;
-            }
-            
-            // Format the JSON response
-            if (result.jsonResponse) {
-                const cleanJsonResponse = {...result.jsonResponse};
-                
-                // Remove description and unsupported if they were added separately
-                if (cleanJsonResponse.description) {
-                    delete cleanJsonResponse.description;
-                }
-                
-                if (cleanJsonResponse.unsupported) {
-                    delete cleanJsonResponse.unsupported;
-                }
-                
-                formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(cleanJsonResponse, null, 2)}</pre></div>`;
-            } else if (result.response) {
-                // Try to extract JSON from the response if it's wrapped in markdown code blocks
-                let rawResponse = result.response;
-                
-                if (typeof rawResponse === 'string') {
-                    // Try to extract JSON if it's in code blocks
-                    const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-                    
-                    if (jsonMatch && jsonMatch[1]) {
-                        try {
-                            const jsonData = JSON.parse(jsonMatch[1]);
-                            const cleanJsonData = {...jsonData};
-                            
-                            // Extract description and unsupported if available to display separately
-                            if (jsonData.description) {
-                                formattedResults += `<div class="description"><strong>Description:</strong><br>${jsonData.description}</div>`;
-                            }
-                            
-                            if (jsonData.unsupported) {
-                                formattedResults += `<p><strong>Unsupported:</strong><br>${jsonData.unsupported}</p>`;
-                            }
-                            
-                            // Remove them from the clean JSON
-                            if (cleanJsonData.description) {
-                                delete cleanJsonData.description;
-                            }
-                            
-                            if (cleanJsonData.unsupported) {
-                                delete cleanJsonData.unsupported;
-                            }
-                            
-                            // Add the clean JSON
-                            formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(cleanJsonData, null, 2)}</pre></div>`;
-                        } catch (e) {
-                            formattedResults += `<p><strong>Response:</strong><br>${rawResponse}</p>`;
-                        }
-                    } else {
-                        formattedResults += `<p><strong>Response:</strong><br>${rawResponse}</p>`;
-                    }
-                } else if (typeof rawResponse === 'object') {
-                    // If response is already an object, format as JSON
-                    const cleanResponse = {...rawResponse};
-                    
-                    // Remove description and unsupported if they were added separately
-                    if (cleanResponse.description) {
-                        delete cleanResponse.description;
-                    }
-                    
-                    if (cleanResponse.unsupported) {
-                        delete cleanResponse.unsupported;
-                    }
-                    
-                    formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(cleanResponse, null, 2)}</pre></div>`;
-                }
-            }
-            
-            // Add finder results if available
-            if (result.finderUrl) {
-                formattedResults += `<div class="finder-results">`;
-                formattedResults += `<h4>Finder Results</h4>`;
-                formattedResults += `<p><strong>Finder URL:</strong> <a href="${result.finderUrl}" target="_blank" rel="noopener noreferrer">${result.finderUrl}</a></p>`;
-                
-                if (result.totalCompanies !== undefined) {
-                    formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> ${result.totalCompanies}</p>`;
-                } else if (result.retryAttempts && result.retryAttempts.length > 0) {
-                    // If we have retry attempts with a successful one, use that count
-                    const successfulAttempt = result.retryAttempts.find(attempt => attempt.result === "success");
-                    if (successfulAttempt && successfulAttempt.count) {
-                        formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> ${successfulAttempt.count}</p>`;
-                    } else {
-                        formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> Unknown (fetch failed)</p>`;
-                    }
-                } else {
-                    formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> Unknown</p>`;
-                }
-                
-                if (result.filterDescription) {
-                    formattedResults += `<div class="filter-description"><strong>Filter Description:</strong><br>${result.filterDescription}</div>`;
-                }
-                
-                if (result.message) {
-                    formattedResults += `<p class="result-message ${result.totalCompanies > 0 ? 'success' : 'warning'}">${result.message}</p>`;
-                }
-                
-                formattedResults += `</div>`;
-            }
-            
-            formattedResults += `</div>`;
-            
-            // Add separator between results
-            if (index < resultsArray.length - 1) {
-                formattedResults += `<hr class="result-separator">`;
-            }
-        });
-        
-        // Use innerHTML to allow HTML elements like links and styling
-        resultsOutput.innerHTML = formattedResults;
-    }
-    
-    // Function to update the success rate chart
-    function updateSuccessChart(successCount, failureCount, identicalResponses = false) {
-        // Chart has been removed from the UI
-        console.log(`Test results: ${successCount} successful, ${failureCount} failed, identical: ${identicalResponses}`);
-        
-        // Keep track of the results for potential future use
-        window.testResults = {
-            successCount,
-            failureCount,
-            identicalResponses
-        };
-    }
-    
-    // Function to determine if a result is successful
-    function isSuccessfulResult(result) {
-        // Check if the result has a valid JSON response
-        if (typeof result.response === 'string') {
-            const jsonMatch = result.response.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (jsonMatch && jsonMatch[1]) {
-                try {
-                    const jsonData = JSON.parse(jsonMatch[1]);
-                    // Consider it successful if it has at least one field other than description and unsupported
-                    const keys = Object.keys(jsonData).filter(key => key !== 'description' && key !== 'unsupported');
-                    return keys.length > 0;
-                } catch (e) {
-                    return false;
-                }
-            }
-            return false;
-        } else if (typeof result.response === 'object') {
-            // If response is already an object, check if it has valid fields
-            const keys = Object.keys(result.response).filter(key => key !== 'description' && key !== 'unsupported');
-            return keys.length > 0;
-        }
-        return false;
-    }
-    
-    // Run single test
-    document.getElementById('run-single').addEventListener('click', async () => {
-        const apiKeyInput = document.getElementById('api-key');
-        const apiKey = apiKeyInput ? apiKeyInput.value : '';
-        
-        if (!apiKey) {
-            showStatus('single-status', 'Please enter your OpenAI API key in the Configuration tab', 'error');
-            return;
-        }
-        
-        const configTextarea = document.getElementById('configuration') || document.getElementById('config-textarea');
-        const configStr = configTextarea ? configTextarea.value : '{}';
-        
-        const questionInput = document.getElementById('single-question');
-        const question = questionInput ? questionInput.value : '';
-        
-        const iterationsInput = document.getElementById('iterations');
-        const iterations = iterationsInput ? parseInt(iterationsInput.value) || 1 : 1;
-        
-        let config;
-        try {
-            config = JSON.parse(configStr);
-        } catch (e) {
-            showStatus('single-status', 'Invalid JSON configuration in the Configuration tab', 'error');
-            return;
-        }
-        
-        showStatus('single-status', '<div class="spinner"></div> Running test...', 'info');
-        
-        // Clear previous results
-        singleResults = [];
-        displayFormattedResults(singleResults, false);
-        
-        try {
-            let successCount = 0;
-            let failureCount = 0;
-            let responses = [];
-            
-            for (let i = 0; i < iterations; i++) {
-                // Determine which prompt to use based on the question
-                const promptType = isInvestorQuestion(question) ? 'investor' : 'startup';
-                const systemPrompt = getSystemPromptForQuestion(question);
-                
-                const result = await runGptQuery(apiKey, systemPrompt, question, config);
-                singleResults.push({
-                    iteration: i + 1,
-                    question,
-                    response: result.content,
-                    promptType: promptType
-                });
-                
-                // Store response for comparison
-                responses.push(result.content);
-                
-                // Check if the result is successful
-                if (isSuccessfulResult(singleResults[singleResults.length - 1])) {
-                    successCount++;
-                } else {
-                    failureCount++;
-                }
-                
-                // Update results in real-time
-                displayFormattedResults(singleResults, false);
-                
-                // Check if responses are identical
-                const areIdentical = iterations > 1 && responses.every(r => r === responses[0]);
-                
-                // Update the chart
-                updateSuccessChart(successCount, failureCount, areIdentical);
-            }
-            
-            // Final check for identical responses
-            const areAllResponsesIdentical = iterations > 1 && responses.every(r => r === responses[0]);
-            
-            if (areAllResponsesIdentical) {
-                showStatus('single-status', 'Test completed successfully! All responses are identical.', 'success');
-            } else {
-                showStatus('single-status', 'Test completed successfully!', 'success');
-            }
-        } catch (error) {
-            showStatus('single-status', `Error: ${error.message}`, 'error');
-        }
-    });
-    
-    // Run batch test
-    document.getElementById('run-batch').addEventListener('click', async () => {
-        const apiKeyInput = document.getElementById('api-key');
-        const apiKey = apiKeyInput ? apiKeyInput.value : '';
-        
-        if (!apiKey) {
-            showStatus('batch-status', 'Please enter your OpenAI API key in the Configuration tab', 'error');
-            return;
-        }
-        
-        const configTextarea = document.getElementById('configuration') || document.getElementById('config-textarea');
-        const configStr = configTextarea ? configTextarea.value : '{}';
-        
-        const batchQuestionsTextarea = document.getElementById('batch-questions');
-        const questionsText = batchQuestionsTextarea ? batchQuestionsTextarea.value : '';
-        const questions = questionsText.split('\n').filter(q => q.trim());
-        
-        if (questions.length === 0) {
-            showStatus('batch-status', 'Please enter at least one question', 'error');
-            return;
-        }
-        
-        let config;
-        try {
-            config = JSON.parse(configStr);
-        } catch (e) {
-            showStatus('batch-status', 'Invalid JSON configuration in the Configuration tab', 'error');
-            return;
-        }
-        
-        showStatus('batch-status', '<div class="spinner"></div> Running batch test...', 'info');
-        
-        // Clear previous results
-        batchResults = [];
-        displayFormattedResults(batchResults, true);
-        
-        try {
-            for (let i = 0; i < questions.length; i++) {
-                const question = questions[i];
-                
-                // Determine which prompt to use based on the question
-                const promptType = isInvestorQuestion(question) ? 'investor' : 'startup';
-                const systemPrompt = getSystemPromptForQuestion(question);
-                
-                const result = await runGptQuery(apiKey, systemPrompt, question, config);
-                batchResults.push({
-                    question,
-                    response: result.content,
-                    promptType: promptType
-                });
-                
-                // Update results in real-time
-                displayFormattedResults(batchResults, true);
-            }
-            
-            showStatus('batch-status', 'Batch test completed successfully!', 'success');
-        } catch (error) {
-            showStatus('batch-status', `Error: ${error.message}`, 'error');
-        }
-    });
-    
-    // Add the missing event listener for the Finder Search button
-    document.getElementById('run-finder').addEventListener('click', runFinderSearch);
-    
-    // Function to fetch company count (real HTTP request)
-    async function fetchCompanyCount(url) {
-        try {
-            // Validate URL
-            if (!url) {
-                console.error("Invalid URL provided to fetchCompanyCount");
-                return {
-                    url: url,
-                    count: 0,
-                    success: false,
-                    error: "Invalid URL provided"
-                };
-            }
-            
-            console.log(`Fetching count from URL via server API: ${url}`);
-            
-            // Call our server API instead of fetching directly
-            const response = await fetch('/api/fetch-count', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ url })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`API error! status: ${response.status}`);
-            }
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                console.log(`API returned count: ${result.count}`);
-                return {
-                    url: url,
-                    count: result.count,
-                    success: true,
-                    elementText: result.elementText
-                };
-            } else {
-                console.warn(`API error: ${result.error}`);
-                return {
-                    url: url,
-                    count: 0,
-                    success: false,
-                    error: result.error || 'Unknown error from API'
-                };
-            }
-            
-        } catch (error) {
-            console.error("Error fetching count:", error);
-            return {
-                url: url,
-                count: 0,
-                success: false,
-                error: error.message || 'Error fetching count'
-            };
-        }
-    }
-    
-    // Function to show status messages
-    function showStatus(elementId, message, type) {
-        const statusElement = document.getElementById(elementId);
-        statusElement.innerHTML = message;
-        statusElement.className = `status ${type}`;
-        statusElement.classList.remove('hidden');
-    }
-
-    // Simple textarea handling - no complex event listeners
-    document.querySelectorAll('textarea').forEach(textarea => {
-        textarea.setAttribute('spellcheck', 'false');
-        textarea.setAttribute('autocomplete', 'off');
-    });
-
-    // Add CSS styles for the prompt selection UI
-    function addPromptSelectionStyles() {
-        const styleElement = document.createElement('style');
-        styleElement.textContent = `
-            .prompt-selection-container {
-                margin-bottom: 20px;
-                padding: 15px;
-                background-color: #f8f9fa;
-                border-radius: 5px;
-                border: 1px solid #dee2e6;
-            }
-            
-            .prompt-selection-container h3 {
-                margin-top: 0;
-                margin-bottom: 10px;
-                font-size: 16px;
-                color: #495057;
-            }
-            
-            .prompt-selection-options {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 15px;
-            }
-            
-            .prompt-selection-options label {
-                display: flex;
-                align-items: center;
-                cursor: pointer;
-                padding: 8px 12px;
-                background-color: #e9ecef;
-                border-radius: 4px;
-                transition: background-color 0.2s;
-            }
-            
-            .prompt-selection-options label:hover {
-                background-color: #dee2e6;
-            }
-            
-            .prompt-selection-options input[type="radio"] {
-                margin-right: 8px;
-            }
-            
-            .system-prompts-container {
-                display: flex;
-                flex-direction: column;
-                gap: 20px;
-            }
-            
-            @media (min-width: 992px) {
-                .system-prompts-container {
-                    flex-direction: row;
-                }
-                
-                .startup-prompt-container,
-                .investor-prompt-container {
-                    flex: 1;
-                }
-            }
-            
-            .startup-prompt-container,
-            .investor-prompt-container {
-                padding: 15px;
-                background-color: #f8f9fa;
-                border-radius: 5px;
-                border: 1px solid #dee2e6;
-            }
-            
-            .startup-prompt-container h3,
-            .investor-prompt-container h3 {
-                margin-top: 0;
-                margin-bottom: 10px;
-                font-size: 16px;
-                color: #495057;
-            }
-            
-            .startup-prompt-container textarea,
-            .investor-prompt-container textarea {
-                width: 100%;
-                min-height: 200px;
-                padding: 10px;
-                font-family: monospace;
-                font-size: 14px;
-                line-height: 1.5;
-                border: 1px solid #ced4da;
-                border-radius: 4px;
-                resize: vertical;
-            }
-        `;
-        document.head.appendChild(styleElement);
-    }
-    
-    // Call the function to add styles
-    addPromptSelectionStyles();
-
-    // Add a function to check and fix the system prompt containers
-    function checkAndFixSystemPromptContainers() {
-        console.log('Checking system prompt containers');
-        
-        // Check if the startup and investor system prompts exist
-        const startupPrompt = document.getElementById('startup-system-prompt');
-        const investorPrompt = document.getElementById('investor-system-prompt');
-        
-        if (!startupPrompt || !investorPrompt) {
-            console.log('System prompt containers missing, recreating them');
-            createSystemPromptInputs();
-        } else {
-            console.log('System prompt containers found');
-        }
-    }
-    
-    // Call the function to check and fix system prompt containers
-    setTimeout(checkAndFixSystemPromptContainers, 500);
-
-    // Add a button to manually recreate the system prompts if needed
-    function addFixPromptsButton() {
-        const configTab = document.getElementById('config-tab');
-        if (!configTab) return;
-        
-        const existingButton = document.getElementById('fix-prompts-button');
-        if (existingButton) return;
-        
-        const fixButton = document.createElement('button');
-        fixButton.id = 'fix-prompts-button';
-        fixButton.className = 'btn';
-        fixButton.style.marginTop = '10px';
-        fixButton.style.backgroundColor = '#6c757d';
-        fixButton.textContent = 'Fix System Prompts';
-        fixButton.addEventListener('click', function() {
-            createSystemPromptInputs();
-            showStatus('config-status', 'System prompts recreated', 'info');
-        });
-        
-        // Add the button after the save button
-        const saveButton = configTab.querySelector('#save-config');
-        if (saveButton && saveButton.parentNode) {
-            saveButton.parentNode.insertBefore(fixButton, saveButton.nextSibling);
-        } else {
-            configTab.appendChild(fixButton);
-        }
-    }
-    
-    // Call the function to add the fix button
-    setTimeout(addFixPromptsButton, 1000);
-
-    // Function to update debug information
-    function updateDebugInfo(results) {
-        const debugOutput = document.getElementById('debug-output');
-        let debugContent = '';
-        
-        if (!debugOutput) {
-            console.error('Debug output element not found');
-            return;
-        }
-        
-        // Check if results is an array or single object
-        const resultsArray = Array.isArray(results) ? results : [results];
-        
-        resultsArray.forEach((result, index) => {
-            debugContent += `<div class="debug-item">`;
-            debugContent += `<h3>Debug Info for Result ${index + 1}</h3>`;
-            
-            // Add steps information if available
-            if (result.steps && Array.isArray(result.steps)) {
-                debugContent += `<div class="debug-steps">`;
-                debugContent += `<h4>Process Steps:</h4>`;
-                debugContent += `<ol>`;
-                result.steps.forEach(step => {
-                    debugContent += `<li>${typeof step === 'string' ? step : JSON.stringify(step)}</li>`;
-                });
-                debugContent += `</ol>`;
-                debugContent += `</div>`;
-            }
-            
-            // Add HTML preview if available
-            if (result.htmlPreview) {
-                debugContent += `<div class="debug-html">`;
-                debugContent += `<h4>HTML Preview:</h4>`;
-                debugContent += `<pre>${result.htmlPreview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>`;
-                debugContent += `</div>`;
-            }
-            
-            // Add CORS error information if available
-            if (result.corsError || result.corsRestricted) {
-                debugContent += `<div class="debug-cors error">`;
-                debugContent += `<h4>CORS Error:</h4>`;
-                debugContent += `<p>${result.error || "The browser prevented access to the external URL due to CORS policy. Using simulated data instead."}</p>`;
-                debugContent += `</div>`;
-            }
-            
-            debugContent += `</div>`;
-        });
-        
-        // Apply styling and add content
-        debugContent = `
-            <style>
-                .debug-item { margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px; border: 1px solid #ddd; }
-                .debug-steps { margin-top: 10px; }
-                .debug-html { margin-top: 15px; }
-                .debug-html pre { background-color: #f1f1f1; padding: 10px; border-radius: 4px; overflow-x: auto; max-height: 300px; }
-                .debug-cors { margin-top: 15px; padding: 10px; border-radius: 4px; }
-                .debug-cors.error { background-color: #f8d7da; color: #721c24; }
-            </style>
-        ` + debugContent;
-        
-        debugOutput.innerHTML = debugContent;
-    }
-
-    // Function for making API calls to OpenAI
-    async function runGptQuery(apiKey, systemPrompt, question, config) {
-        if (!apiKey) {
-            throw new Error("API key is required");
-        }
-        
-        if (!question) {
-            throw new Error("Question is required");
-        }
-        
-        // Create messages array with system prompt and user question
-        const messages = [
-            {
-                role: "system",
-                content: systemPrompt
-            },
-            {
-                role: "user",
-                content: question
-            }
-        ];
-        
-        // Get model from config or use default
-        const model = config.model || "gpt-4o";
-        
-        // Merge other config options
-        const apiConfig = {
-            model: model,
-            messages: messages,
-            temperature: config.temperature !== undefined ? config.temperature : 0.7,
-            max_tokens: config.max_tokens || 1000
-        };
-        
-        // Add any other config parameters that were provided
-        for (const key in config) {
-            if (key !== 'model' && key !== 'temperature' && key !== 'max_tokens' && !apiConfig[key]) {
-                apiConfig[key] = config[key];
-            }
-        }
-        
-        try {
-            // Make request to OpenAI API
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                },
-                body: JSON.stringify(apiConfig)
-            });
-            
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => null);
-                throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorData ? JSON.stringify(errorData) : 'No error details'}`);
-            }
-            
-            const data = await response.json();
-            
-            if (!data.choices || data.choices.length === 0) {
-                throw new Error("No response from OpenAI API");
-            }
-            
-            const result = {
-                content: data.choices[0].message.content,
-                usage: data.usage,
-                model: data.model,
-                finish_reason: data.choices[0].finish_reason
-            };
-            
-            return result;
-        } catch (error) {
-            throw new Error(`Failed to get response from OpenAI: ${error.message}`);
-        }
-    }
-
     // Function for running Finder searches
     async function runFinderSearch() {
         const apiKeyInput = document.getElementById('api-key');
@@ -1187,6 +484,27 @@ You:
         
         if (!apiKey) {
             showStatus('finder-status', 'Please enter your OpenAI API key in the Configuration tab', 'error');
+            return;
+        }
+
+        // Check if server is running before proceeding
+        try {
+            const serverCheckResponse = await fetch('/api/health-check', { 
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                // Set a short timeout to quickly determine if server is running
+                signal: AbortSignal.timeout(2000)
+            });
+            
+            if (!serverCheckResponse.ok) {
+                showServerWarning();
+                showStatus('finder-status', 'Server not running. Please start the Node.js server to use Finder Search.', 'error');
+                return;
+            }
+        } catch (error) {
+            console.error('Server connection error:', error);
+            showServerWarning();
+            showStatus('finder-status', 'Server not running. Please start the Node.js server to use Finder Search.', 'error');
             return;
         }
         
@@ -1313,7 +631,34 @@ You:
                                 jsonResponse.investsectors = sectorId;
                             }
                         }
-                        
+                        // Then check for sectorFocus (which gets mapped to investsectors)
+                        else if (jsonResponse.sectorFocus) {
+                            if (Array.isArray(jsonResponse.sectorFocus)) {
+                                jsonResponse.sectorFocus.forEach(sector => {
+                                    // The sector should already be an ID at this point, but double-check
+                                    if (sector.startsWith('agxzfm')) {
+                                        jsonResponse.investsectors = jsonResponse.investsectors || [];
+                                        jsonResponse.investsectors.push(sector);
+                                    } else {
+                                        // If somehow it's still a name, convert it
+                                        const sectorId = getClassificationId(sector);
+                                        console.log(`Final mapping for sectorFocus: "${sector}" -> "${sectorId}"`);
+                                        jsonResponse.investsectors.push(sectorId);
+                                    }
+                                });
+                            } else {
+                                // The sector should already be an ID at this point, but double-check
+                                if (jsonResponse.sectorFocus.startsWith('agxzfm')) {
+                                    jsonResponse.investsectors = jsonResponse.investsectors || [];
+                                    jsonResponse.investsectors.push(jsonResponse.sectorFocus);
+                                } else {
+                                    // If somehow it's still a name, convert it
+                                    const sectorId = getClassificationId(jsonResponse.sectorFocus);
+                                    console.log(`Final mapping for sectorFocus: "${jsonResponse.sectorFocus}" -> "${sectorId}"`);
+                                    jsonResponse.investsectors.push(sectorId);
+                                }
+                            }
+                        }
                     } catch (e) {
                         showStatus('finder-status', 'Error parsing JSON from response', 'error');
                         return;
@@ -1816,72 +1161,48 @@ You:
 
     // Function to show server warning
     function showServerWarning() {
+        // Remove any existing warning first
+        const existingWarning = document.querySelector('.server-warning');
+        if (existingWarning) {
+            existingWarning.remove();
+        }
+        
         const warningDiv = document.createElement('div');
         warningDiv.className = 'server-warning';
+        warningDiv.style.position = 'fixed';
+        warningDiv.style.top = '20px';
+        warningDiv.style.left = '50%';
+        warningDiv.style.transform = 'translateX(-50%)';
+        warningDiv.style.zIndex = '1000';
+        warningDiv.style.backgroundColor = '#fff3cd';
+        warningDiv.style.border = '1px solid #ffeeba';
+        warningDiv.style.borderRadius = '5px';
+        warningDiv.style.padding = '15px';
+        warningDiv.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+        warningDiv.style.maxWidth = '500px';
+        warningDiv.style.width = '90%';
+        
         warningDiv.innerHTML = `
             <div class="warning-content">
-                <h3>⚠️ Server Not Running</h3>
-                <p>The Node.js server required for fetching accurate company counts is not running.</p>
-                <p>To start the server:</p>
-                <ol>
+                <h3 style="color: #856404; margin-top: 0;">⚠️ Server Not Running</h3>
+                <p>The Node.js server required for Finder Search functionality is not running.</p>
+                <p><strong>To start the server:</strong></p>
+                <ol style="padding-left: 20px;">
                     <li>Open a terminal/command prompt</li>
                     <li>Navigate to the project directory</li>
                     <li>Run <code>npm install</code> (first time only)</li>
                     <li>Run <code>npm run server</code></li>
                 </ol>
                 <p>Refer to the <code>SERVER_README.md</code> file for more details.</p>
-                <button id="close-warning">Close</button>
+                <p><strong>Note:</strong> The Finder Search tab requires this server to function properly.</p>
+                <button id="close-warning" style="background-color: #856404; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">Close</button>
             </div>
         `;
         
         document.body.appendChild(warningDiv);
         
-        // Add style for the warning
-        const style = document.createElement('style');
-        style.textContent = `
-            .server-warning {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background-color: rgba(0, 0, 0, 0.7);
-                z-index: 9999;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-            .warning-content {
-                background-color: white;
-                padding: 20px;
-                border-radius: 5px;
-                max-width: 500px;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-            }
-            .warning-content h3 {
-                color: #e74c3c;
-                margin-top: 0;
-            }
-            .warning-content code {
-                background-color: #f5f5f5;
-                padding: 2px 4px;
-                border-radius: 3px;
-                font-family: monospace;
-            }
-            #close-warning {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                padding: 8px 12px;
-                border-radius: 3px;
-                cursor: pointer;
-                margin-top: 10px;
-            }
-        `;
-        document.head.appendChild(style);
-        
-        // Add close button handler
-        document.getElementById('close-warning').addEventListener('click', () => {
+        // Add event listener to close button
+        document.getElementById('close-warning').addEventListener('click', function() {
             warningDiv.remove();
         });
     }
@@ -2076,7 +1397,7 @@ You:
             // Manually add specific mappings for problematic classifications
             const manualMappings = {
                 'Industrial Technologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
-                'Artificial Intelligence': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Pv6qoEKDA',
+                'Artificial Intelligence': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA',
                 'Financial Technology': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Pv6qoEKDA'
             };
             
@@ -2193,4 +1514,271 @@ You:
             localStorage.setItem('theme', 'light');
         }
     });
+    
+    // Run single test
+    document.getElementById('run-single').addEventListener('click', async () => {
+        const apiKeyInput = document.getElementById('api-key');
+        const apiKey = apiKeyInput ? apiKeyInput.value : '';
+        
+        if (!apiKey) {
+            showStatus('single-status', 'Please enter your OpenAI API key in the Configuration tab', 'error');
+            return;
+        }
+        
+        const configTextarea = document.getElementById('configuration') || document.getElementById('config-textarea');
+        const configStr = configTextarea ? configTextarea.value : '{}';
+        
+        const questionInput = document.getElementById('single-question');
+        const question = questionInput ? questionInput.value : '';
+        
+        const iterationsInput = document.getElementById('iterations');
+        const iterations = iterationsInput ? parseInt(iterationsInput.value) || 1 : 1;
+        
+        let config;
+        try {
+            config = JSON.parse(configStr);
+        } catch (e) {
+            showStatus('single-status', 'Invalid JSON configuration in the Configuration tab', 'error');
+            return;
+        }
+        
+        showStatus('single-status', '<div class="spinner"></div> Running test...', 'info');
+        
+        // Clear previous results
+        singleResults = [];
+        displayFormattedResults(singleResults, false);
+        
+        try {
+            for (let i = 0; i < iterations; i++) {
+                // Determine which prompt to use based on the question
+                const promptType = determinePromptType(question);
+                const systemPrompt = getSystemPromptForQuestion(question);
+                
+                const result = await runGptQuery(apiKey, systemPrompt, question, config);
+                singleResults.push({
+                    iteration: i + 1,
+                    question,
+                    response: result.content,
+                    promptType: promptType
+                });
+                
+                // Update results in real-time
+                displayFormattedResults(singleResults, false);
+            }
+            
+            showStatus('single-status', 'Test completed successfully!', 'success');
+        } catch (error) {
+            showStatus('single-status', `Error: ${error.message}`, 'error');
+        }
+    });
+    
+    // Function to display formatted results
+    function displayFormattedResults(results, isFinder = true) {
+        const resultsOutput = document.getElementById('results-output');
+        const resultsContainer = document.getElementById('results-container');
+        const placeholder = document.getElementById('placeholder-message');
+        
+        if (!resultsOutput || !resultsContainer || !placeholder) {
+            return;
+        }
+        
+        // Show or hide the results and placeholder based on whether we have results
+        if (results && results.length > 0) {
+            resultsContainer.classList.remove('hidden');
+            placeholder.style.display = 'none';
+        } else {
+            resultsContainer.classList.add('hidden');
+            placeholder.style.display = 'flex';
+            return; // No need to proceed further
+        }
+        
+        // Format the results
+        let formattedResults = '';
+        
+        // Check if results is an array, if not convert it to an array for consistent handling
+        const resultsArray = Array.isArray(results) ? results : [results];
+        
+        resultsArray.forEach((result, index) => {
+            // Format the output
+            formattedResults += `<div class="result-item">`;
+            
+            // Add question and prompt type in a header section
+            formattedResults += `<div class="result-header">`;
+            formattedResults += `<h3>Question ${index + 1}</h3>`;
+            if (result.promptType) {
+                const displayType = result.promptType.charAt(0).toUpperCase() + result.promptType.slice(1);
+                formattedResults += `<div class="prompt-type">${displayType}</div>`;
+            }
+            formattedResults += `</div>`;
+            
+            formattedResults += `<p class="question-text">${result.question}</p>`;
+            
+            // Add description separately if available
+            if (result.description) {
+                formattedResults += `<div class="description"><strong>Description:</strong><br>${result.description}</div>`;
+            }
+            
+            // Format the JSON response or text response
+            if (result.jsonResponse) {
+                formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(result.jsonResponse, null, 2)}</pre></div>`;
+            } else if (result.response) {
+                // Try to extract JSON from the response if it's wrapped in markdown code blocks
+                let rawResponse = result.response;
+                
+                if (typeof rawResponse === 'string') {
+                    // Try to extract JSON if it's in code blocks
+                    const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                    
+                    if (jsonMatch && jsonMatch[1]) {
+                        try {
+                            const jsonData = JSON.parse(jsonMatch[1]);
+                            formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(jsonData, null, 2)}</pre></div>`;
+                        } catch (e) {
+                            formattedResults += `<p><strong>Response:</strong><br>${rawResponse}</p>`;
+                        }
+                    } else {
+                        formattedResults += `<p><strong>Response:</strong><br>${rawResponse}</p>`;
+                    }
+                } else if (typeof rawResponse === 'object') {
+                    // If response is already an object, format as JSON
+                    formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(rawResponse, null, 2)}</pre></div>`;
+                }
+            }
+            
+            // Add finder results if available
+            if (result.finderUrl) {
+                formattedResults += `<div class="finder-results">`;
+                formattedResults += `<h4>Finder Results</h4>`;
+                formattedResults += `<p><strong>Finder URL:</strong> <a href="${result.finderUrl}" target="_blank" rel="noopener noreferrer">${result.finderUrl}</a></p>`;
+                
+                if (result.totalCompanies !== undefined) {
+                    formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> ${result.totalCompanies}</p>`;
+                }
+                
+                if (result.filterDescription) {
+                    formattedResults += `<div class="filter-description"><strong>Filter Description:</strong><br>${result.filterDescription}</div>`;
+                }
+                
+                if (result.message) {
+                    formattedResults += `<p class="result-message ${result.totalCompanies > 0 ? 'success' : 'warning'}">${result.message}</p>`;
+                }
+                
+                formattedResults += `</div>`;
+            }
+            
+            formattedResults += `</div>`;
+            
+            // Add separator between results
+            if (index < resultsArray.length - 1) {
+                formattedResults += `<hr class="result-separator">`;
+            }
+        });
+        
+        // Use innerHTML to allow HTML elements like links and styling
+        resultsOutput.innerHTML = formattedResults;
+    }
+    
+    // Function to show status messages
+    function showStatus(elementId, message, type) {
+        const statusElement = document.getElementById(elementId);
+        if (!statusElement) return;
+        
+        statusElement.innerHTML = message;
+        statusElement.className = `status ${type}`;
+        statusElement.classList.remove('hidden');
+    }
+    
+    // Function for making API calls to OpenAI
+    async function runGptQuery(apiKey, systemPrompt, question, config) {
+        if (!apiKey) {
+            throw new Error("API key is required");
+        }
+        
+        if (!question) {
+            throw new Error("Question is required");
+        }
+        
+        // Create messages array with system prompt and user question
+        const messages = [
+            {
+                role: "system",
+                content: systemPrompt
+            },
+            {
+                role: "user",
+                content: question
+            }
+        ];
+        
+        // Get model from config or use default
+        const model = config.model || "gpt-4o";
+        
+        // Merge other config options
+        const apiConfig = {
+            model: model,
+            messages: messages,
+            temperature: config.temperature !== undefined ? config.temperature : 0.7,
+            max_tokens: config.max_tokens || 1000
+        };
+        
+        // Add any other config parameters that were provided
+        for (const key in config) {
+            if (key !== 'model' && key !== 'temperature' && key !== 'max_tokens' && !apiConfig[key]) {
+                apiConfig[key] = config[key];
+            }
+        }
+        
+        try {
+            // Make request to OpenAI API
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(apiConfig)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                throw new Error(`OpenAI API error: ${response.status} ${response.statusText} - ${errorData ? JSON.stringify(errorData) : 'No error details'}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.choices || data.choices.length === 0) {
+                throw new Error("No response from OpenAI API");
+            }
+            
+            const result = {
+                content: data.choices[0].message.content,
+                usage: data.usage,
+                model: data.model,
+                finish_reason: data.choices[0].finish_reason
+            };
+            
+            return result;
+        } catch (error) {
+            throw new Error(`Failed to get response from OpenAI: ${error.message}`);
+        }
+    }
+
+    // Add event listener for the Finder Search button
+    document.getElementById('run-finder').addEventListener('click', runFinderSearch);
+
+    // Add a function to check and fix the system prompt containers
+    function checkAndFixSystemPromptContainers() {
+        console.log('Checking system prompt containers');
+        
+        // Check if the startup and investor system prompts exist
+        const startupPrompt = document.getElementById('startup-system-prompt');
+        const investorPrompt = document.getElementById('investor-system-prompt');
+        
+        if (!startupPrompt || !investorPrompt) {
+            console.log('System prompt containers missing, recreating them');
+            createSystemPromptInputs();
+        } else {
+            console.log('System prompt containers found');
+        }
+    }
 });
