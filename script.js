@@ -1,3 +1,25 @@
+// Global function to toggle theme
+function toggleTheme() {
+    console.log('Theme toggle clicked');
+    
+    const moonIcon = document.getElementById('moon-icon');
+    const sunIcon = document.getElementById('sun-icon');
+    
+    document.body.classList.toggle('dark-mode');
+    
+    if (document.body.classList.contains('dark-mode')) {
+        console.log('Switching to dark mode');
+        localStorage.setItem('theme', 'dark');
+        moonIcon.style.display = 'none';
+        sunIcon.style.display = 'block';
+    } else {
+        console.log('Switching to light mode');
+        localStorage.setItem('theme', 'light');
+        moonIcon.style.display = 'block';
+        sunIcon.style.display = 'none';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Polyfill for AbortSignal.timeout if not supported
     if (!AbortSignal.timeout) {
@@ -8,19 +30,45 @@ document.addEventListener('DOMContentLoaded', function() {
         };
     }
     
+    // Theme toggle functionality
+    const setupThemeToggle = function() {
+        const themeToggle = document.getElementById('theme-toggle');
+        const moonIcon = document.getElementById('moon-icon');
+        const sunIcon = document.getElementById('sun-icon');
+        
+        if (!themeToggle || !moonIcon || !sunIcon) {
+            console.error('Theme toggle elements not found');
+            return;
+        }
+        
+        // Check for saved theme preference or use preferred color scheme
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            moonIcon.style.display = 'none';
+            sunIcon.style.display = 'block';
+        } else if (savedTheme === 'light') {
+            document.body.classList.remove('dark-mode');
+            moonIcon.style.display = 'block';
+            sunIcon.style.display = 'none';
+        } else {
+            // If no saved preference, check system preference
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.body.classList.add('dark-mode');
+                moonIcon.style.display = 'none';
+                sunIcon.style.display = 'block';
+            }
+        }
+    };
+    
+    // Initialize theme toggle
+    setupThemeToggle();
+    
     // Initialize UI elements
     const apiKeyInput = document.getElementById('api-key');
     // Remove reference to the standalone system prompt
     const configTextarea = document.getElementById('configuration') || document.getElementById('config-textarea');
     const finderQuestionInput = document.getElementById('finder-question');
-    
-    // Initialize theme from localStorage
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-mode');
-        document.getElementById('moon-icon').style.display = 'none';
-        document.getElementById('sun-icon').style.display = 'block';
-    }
     
     // Global variable to store location mappings
     let locationNameToIdMap = {};
@@ -156,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Create startup and investor system prompts
     createSystemPromptInputs();
-    
+
     if (localStorage.getItem('configuration')) {
         try {
             const savedConfig = JSON.parse(localStorage.getItem('configuration'));
@@ -1420,76 +1468,15 @@ You:
 
     // Function to get classification ID from name
     function getClassificationId(classificationName) {
-        if (!classificationName) return classificationName;
+        if (!classificationName) return '';
         
-        // Log the lookup attempt
-        console.log(`Looking up classification: "${classificationName}"`);
-        
-        // Direct mapping for critical classifications
-        const criticalMappings = {
-            'Industrial Technologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
-            'industrial technologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
-            'IndustrialTechnologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
-            'industrialtechnologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
-            'industrial tech': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
-            'Industrial Tech': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
-            'Artificial Intelligence': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA',
-            'artificial intelligence': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA',
-            'AI': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA',
-            'ai': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA'
-        };
-        
-        // Check direct critical mappings first
-        if (criticalMappings[classificationName]) {
-            console.log(`Found direct critical mapping for "${classificationName}": ${criticalMappings[classificationName]}`);
-            return criticalMappings[classificationName];
-        }
-        
-        // Check for direct match with original name
-        if (classificationNameToIdMap[classificationName]) {
-            console.log(`Found direct match for "${classificationName}": ${classificationNameToIdMap[classificationName]}`);
-            return classificationNameToIdMap[classificationName];
-        }
-        
-        // Try case-insensitive lookup
-        const lowerName = classificationName.toLowerCase();
-        if (classificationNameToIdMap[lowerName]) {
-            console.log(`Found case-insensitive match for "${classificationName}": ${classificationNameToIdMap[lowerName]}`);
-            return classificationNameToIdMap[lowerName];
-        }
-        
-        // Try without spaces
-        const noSpaceName = classificationName.replace(/\s+/g, '');
-        if (classificationNameToIdMap[noSpaceName]) {
-            console.log(`Found no-space match for "${classificationName}": ${classificationNameToIdMap[noSpaceName]}`);
-            return classificationNameToIdMap[noSpaceName];
-        }
-        
-        // Try lowercase without spaces
-        const lowerNoSpaceName = lowerName.replace(/\s+/g, '');
-        if (classificationNameToIdMap[lowerNoSpaceName]) {
-            console.log(`Found lowercase no-space match for "${classificationName}": ${classificationNameToIdMap[lowerNoSpaceName]}`);
-            return classificationNameToIdMap[lowerNoSpaceName];
-        }
-        
-        // Try normalized name
+        // Normalize the input name
         const normalizedName = normalizeClassificationName(classificationName);
+        
+        // Check if we have a direct match in our map
         if (classificationNameToIdMap[normalizedName]) {
-            console.log(`Found normalized match for "${classificationName}": ${classificationNameToIdMap[normalizedName]}`);
-            return classificationNameToIdMap[normalizedName];
-        }
-        
-        // Handle special cases for Industrial Technologies
-        if (lowerName.includes('industrial') && (lowerName.includes('tech') || lowerName.includes('technolog'))) {
-            const industrialTechId = 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA';
-            console.log(`Using hardcoded ID for Industrial Technologies: ${industrialTechId}`);
-            return industrialTechId;
-        }
-        
-        // Handle special cases for Artificial Intelligence
-        if (lowerName === 'ai' || (lowerName.includes('artificial') && lowerName.includes('intellig'))) {
-            const aiId = 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA';
-            console.log(`Using hardcoded ID for Artificial Intelligence: ${aiId}`);
+            const aiId = classificationNameToIdMap[normalizedName];
+            console.log(`Found direct match for classification: ${normalizedName} -> ${aiId}`);
             return aiId;
         }
         
@@ -1498,80 +1485,6 @@ You:
         return classificationName;
     }
 
-    // Theme toggle functionality
-    document.getElementById('theme-toggle').addEventListener('click', function() {
-        document.body.classList.toggle('dark-mode');
-        const moonIcon = document.getElementById('moon-icon');
-        const sunIcon = document.getElementById('sun-icon');
-        
-        if (document.body.classList.contains('dark-mode')) {
-            moonIcon.style.display = 'none';
-            sunIcon.style.display = 'block';
-            localStorage.setItem('theme', 'dark');
-        } else {
-            moonIcon.style.display = 'block';
-            sunIcon.style.display = 'none';
-            localStorage.setItem('theme', 'light');
-        }
-    });
-    
-    // Run single test
-    document.getElementById('run-single').addEventListener('click', async () => {
-        const apiKeyInput = document.getElementById('api-key');
-        const apiKey = apiKeyInput ? apiKeyInput.value : '';
-        
-        if (!apiKey) {
-            showStatus('single-status', 'Please enter your OpenAI API key in the Configuration tab', 'error');
-            return;
-        }
-        
-        const configTextarea = document.getElementById('configuration') || document.getElementById('config-textarea');
-        const configStr = configTextarea ? configTextarea.value : '{}';
-        
-        const questionInput = document.getElementById('single-question');
-        const question = questionInput ? questionInput.value : '';
-        
-        const iterationsInput = document.getElementById('iterations');
-        const iterations = iterationsInput ? parseInt(iterationsInput.value) || 1 : 1;
-        
-        let config;
-        try {
-            config = JSON.parse(configStr);
-        } catch (e) {
-            showStatus('single-status', 'Invalid JSON configuration in the Configuration tab', 'error');
-            return;
-        }
-        
-        showStatus('single-status', '<div class="spinner"></div> Running test...', 'info');
-        
-        // Clear previous results
-        singleResults = [];
-        displayFormattedResults(singleResults, false);
-        
-        try {
-            for (let i = 0; i < iterations; i++) {
-                // Determine which prompt to use based on the question
-                const promptType = determinePromptType(question);
-                const systemPrompt = getSystemPromptForQuestion(question);
-                
-                const result = await runGptQuery(apiKey, systemPrompt, question, config);
-                singleResults.push({
-                    iteration: i + 1,
-                    question,
-                    response: result.content,
-                    promptType: promptType
-                });
-                
-                // Update results in real-time
-                displayFormattedResults(singleResults, false);
-            }
-            
-            showStatus('single-status', 'Test completed successfully!', 'success');
-        } catch (error) {
-            showStatus('single-status', `Error: ${error.message}`, 'error');
-        }
-    });
-    
     // Function to display formatted results
     function displayFormattedResults(results, isFinder = true) {
         const resultsOutput = document.getElementById('results-output');
@@ -1776,4 +1689,61 @@ You:
             createSystemPromptInputs();
         }
     }
+
+    // Run single test
+    document.getElementById('run-single').addEventListener('click', async () => {
+        const apiKeyInput = document.getElementById('api-key');
+        const apiKey = apiKeyInput ? apiKeyInput.value : '';
+        
+        if (!apiKey) {
+            showStatus('single-status', 'Please enter your OpenAI API key in the Configuration tab', 'error');
+            return;
+        }
+        
+        const configTextarea = document.getElementById('configuration') || document.getElementById('config-textarea');
+        const configStr = configTextarea ? configTextarea.value : '{}';
+        
+        const questionInput = document.getElementById('single-question');
+        const question = questionInput ? questionInput.value : '';
+        
+        const iterationsInput = document.getElementById('iterations');
+        const iterations = iterationsInput ? parseInt(iterationsInput.value) || 1 : 1;
+        
+        let config;
+        try {
+            config = JSON.parse(configStr);
+        } catch (e) {
+            showStatus('single-status', 'Invalid JSON configuration in the Configuration tab', 'error');
+            return;
+        }
+        
+        showStatus('single-status', '<div class="spinner"></div> Running test...', 'info');
+        
+        // Clear previous results
+        singleResults = [];
+        displayFormattedResults(singleResults, false);
+        
+        try {
+            for (let i = 0; i < iterations; i++) {
+                // Determine which prompt to use based on the question
+                const promptType = determinePromptType(question);
+                const systemPrompt = getSystemPromptForQuestion(question);
+                
+                const result = await runGptQuery(apiKey, systemPrompt, question, config);
+                singleResults.push({
+                    iteration: i + 1,
+                    question,
+                    response: result.content,
+                    promptType: promptType
+                });
+                
+                // Update results in real-time
+                displayFormattedResults(singleResults, false);
+            }
+            
+            showStatus('single-status', 'Test completed successfully!', 'success');
+        } catch (error) {
+            showStatus('single-status', `Error: ${error.message}`, 'error');
+        }
+    });
 });
