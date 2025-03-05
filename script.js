@@ -5,8 +5,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const configTextarea = document.getElementById('configuration') || document.getElementById('config-textarea');
     const finderQuestionInput = document.getElementById('finder-question');
     
-    // Chart variables
-    let successChart = null;
+    // Initialize theme from localStorage
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+        document.getElementById('moon-icon').style.display = 'none';
+        document.getElementById('sun-icon').style.display = 'block';
+    }
     
     // Global variable to store location mappings
     let locationNameToIdMap = {};
@@ -635,74 +640,15 @@ You:
     
     // Function to update the success rate chart
     function updateSuccessChart(successCount, failureCount, identicalResponses = false) {
-        const chartContainer = document.getElementById('chart-container');
-        const ctx = document.getElementById('success-chart').getContext('2d');
+        // Chart has been removed from the UI
+        console.log(`Test results: ${successCount} successful, ${failureCount} failed, identical: ${identicalResponses}`);
         
-        // Destroy previous chart if it exists
-        if (successChart) {
-            successChart.destroy();
-        }
-        
-        // Calculate percentages
-        const total = successCount + failureCount;
-        const successPercent = total > 0 ? Math.round((successCount / total) * 100) : 0;
-        const failurePercent = total > 0 ? Math.round((failureCount / total) * 100) : 0;
-        
-        // Create labels based on whether responses are identical
-        let successLabel = `Valid JSON (${successCount})`;
-        let failureLabel = `Invalid JSON (${failureCount})`;
-        
-        if (identicalResponses && total > 1) {
-            successLabel = `Valid JSON (${successCount}) - Identical`;
-            failureLabel = `Invalid JSON (${failureCount}) - Identical`;
-        }
-        
-        // Create new chart
-        successChart = new Chart(ctx, {
-            type: 'pie',
-            data: {
-                labels: [successLabel, failureLabel],
-                datasets: [{
-                    data: [successCount, failureCount],
-                    backgroundColor: [
-                        'rgba(40, 167, 69, 0.7)',  // Success - green
-                        'rgba(220, 53, 69, 0.7)'   // Failure - red
-                    ],
-                    borderColor: [
-                        'rgba(40, 167, 69, 1)',
-                        'rgba(220, 53, 69, 1)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            font: {
-                                size: 12
-                            }
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.label || '';
-                                const value = context.raw || 0;
-                                const percent = value === successCount ? successPercent : failurePercent;
-                                return `${label}: ${value} (${percent}%)`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        
-        // Show the chart container
-        chartContainer.classList.remove('hidden');
+        // Keep track of the results for potential future use
+        window.testResults = {
+            successCount,
+            failureCount,
+            identicalResponses
+        };
     }
     
     // Function to determine if a result is successful
@@ -2230,4 +2176,21 @@ You:
         console.log(`No mapping found for classification: ${classificationName}`);
         return classificationName;
     }
+
+    // Theme toggle functionality
+    document.getElementById('theme-toggle').addEventListener('click', function() {
+        document.body.classList.toggle('dark-mode');
+        const moonIcon = document.getElementById('moon-icon');
+        const sunIcon = document.getElementById('sun-icon');
+        
+        if (document.body.classList.contains('dark-mode')) {
+            moonIcon.style.display = 'none';
+            sunIcon.style.display = 'block';
+            localStorage.setItem('theme', 'dark');
+        } else {
+            moonIcon.style.display = 'block';
+            sunIcon.style.display = 'none';
+            localStorage.setItem('theme', 'light');
+        }
+    });
 });
