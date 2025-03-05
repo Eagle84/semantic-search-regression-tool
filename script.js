@@ -1606,7 +1606,7 @@ You:
         const handledParams = ['investorType', 'location', 'investmentStage', 'sectorFocus', 
                               'sectorclassification', 'lowerFoundedYear', 'upperFoundedYear', 
                               'alltags', 'fundingstages', 'leadMin', 'investleadmin', 'sortBy',
-                              'description', 'unsupported'];
+                              'description', 'unsupported', 'status'];
                               
         for (const [key, value] of Object.entries(jsonResponse)) {
             // Skip parameters we've already handled
@@ -1622,6 +1622,9 @@ You:
                 params.append(key, value);
             }
         }
+        
+        // Add status=Active parameter to all URLs
+        params.append('status', 'Active');
         
         // Construct the final URL
         const queryString = params.toString();

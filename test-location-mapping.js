@@ -125,6 +125,9 @@ async function loadLocationMappings() {
             const locationId = getLocationId(loc);
             params.append('location', locationId);
             
+            // Add status=Active parameter
+            params.append('status', 'Active');
+            
             const queryString = params.toString();
             const finalUrl = queryString ? `${baseUrl}?&${queryString}` : baseUrl;
             
@@ -136,9 +139,13 @@ async function loadLocationMappings() {
         
         // Generate example URL from user query
         log('\nExample from user query:');
-        const exampleUrl = `${baseUrl}?&location=${getLocationId('Tel-Aviv-Yafo')}`;
+        const params = new URLSearchParams();
+        params.append('location', getLocationId('Tel-Aviv-Yafo'));
+        params.append('status', 'Active');
+        const queryString = params.toString();
+        const exampleUrl = `${baseUrl}?&${queryString}`;
         log(`Example URL: "${exampleUrl}"`);
-        log(`Original example: "search?&location=agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"`);
+        log(`Original example: "search?&location=agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw&status=Active"`);
         
         // Write to file for easier viewing
         fs.writeFileSync('location-mapping-results.txt', outputText);
