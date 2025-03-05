@@ -1269,6 +1269,7 @@ You:
             );
             
             let jsonResponse = null;
+            let displayJsonResponse = null; // Initialize displayJsonResponse
             let description = '';
             
             if (result && result.content) {
@@ -1289,6 +1290,9 @@ You:
                             description += jsonResponse.unsupported ? `\n\nUnsupported fields: ${jsonResponse.unsupported}` : '';
                             delete jsonResponse.unsupported;
                         }
+                        
+                        // Create a deep copy of the original JSON response for display
+                        displayJsonResponse = JSON.parse(JSON.stringify(jsonResponse));
                         
                         // Pre-process the JSON response to map classification names to IDs
                         if (promptType === 'investor' && jsonResponse.sectorFocus) {
@@ -1359,6 +1363,11 @@ You:
                 return;
             }
             
+            // Ensure displayJsonResponse is defined
+            if (!displayJsonResponse) {
+                displayJsonResponse = JSON.parse(JSON.stringify(jsonResponse));
+            }
+            
             // Generate URL and fetch count
             showStatus('finder-status', '<div class="spinner"></div> Fetching results...', 'info');
             
@@ -1400,7 +1409,7 @@ You:
                 
                 // Format and display results with error
                 const formattedResult = formatFinderResponseToMatchSingle(
-                    jsonResponse, 
+                    displayJsonResponse, // Use the display version with original names
                     description, 
                     totalCompaniesObj, 
                     promptType
@@ -1425,7 +1434,7 @@ You:
             
             // Format and display the results
             const formattedResult = formatFinderResponseToMatchSingle(
-                jsonResponse, 
+                displayJsonResponse, // Use the display version with original names
                 description, 
                 totalCompaniesObj, 
                 promptType
