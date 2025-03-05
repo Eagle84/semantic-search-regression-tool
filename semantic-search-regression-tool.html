@@ -9,96 +9,147 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <!-- Dark mode toggle button -->
+    <div class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode">
+        <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+    </div>
+
     <div class="container">
-        <h1>Semantic Search GPT Regression Tool</h1>
-        
-        <div class="two-column-layout">
-            <!-- Left column - Controls -->
-            <div class="column left-column">
-                <div class="card">
-                    <div class="tabs">
-                        <div class="tab active" data-tab="single">Single Question</div>
-                        <div class="tab" data-tab="batch">Batch Questions</div>
-                        <div class="tab" data-tab="finder">Finder Search</div>
-                        <div class="tab" data-tab="config">Configuration</div>
-                    </div>
-                    
-                    <div class="tab-content active" id="single-tab">
-                        <div class="form-group">
-                            <label for="single-question">Question</label>
-                            <textarea id="single-question" placeholder="Enter your question here..." autocomplete="off" spellcheck="false"></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="iterations">Number of Iterations</label>
-                            <input type="number" id="iterations" min="1" value="1">
-                        </div>
-                        
-                        <button id="run-single">Run Test</button>
-                        <div id="single-status" class="status hidden"></div>
-                        
-                        <!-- Add chart container -->
-                        <div id="chart-container" class="chart-container hidden">
-                            <h3>Success Rate</h3>
-                            <canvas id="success-chart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div class="tab-content" id="batch-tab">
-                        <div class="form-group">
-                            <label for="batch-questions">Questions (One per line)</label>
-                            <textarea id="batch-questions" placeholder="Enter multiple questions, one per line..." autocomplete="off" spellcheck="false"></textarea>
-                        </div>
-                        
-                        <button id="run-batch">Run Batch Test</button>
-                        <div id="batch-status" class="status hidden"></div>
-                    </div>
-                    
-                    <div class="tab-content" id="finder-tab">
-                        <div class="form-group">
-                            <label for="finder-question">Question</label>
-                            <textarea id="finder-question" placeholder="Enter your question here..." autocomplete="off" spellcheck="false"></textarea>
-                        </div>
-                        
-                        <button id="run-finder">Search Finder</button>
-                        <div id="finder-status" class="status hidden"></div>
-                    </div>
-                    
-                    <div class="tab-content" id="config-tab">
-                        <div class="form-group api-key-container">
-                            <label for="api-key">OpenAI API Key</label>
-                            <input type="password" id="api-key" placeholder="sk-...">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="configuration">Configuration (JSON)</label>
-                            <textarea id="configuration" placeholder="{...}" autocomplete="off" spellcheck="false" rows="8"></textarea>
-                        </div>
-                        
-                        <button id="save-config">Save Configuration</button>
-                        <div id="config-status" class="status hidden"></div>
-                    </div>
-                </div>
+        <div class="left-column">
+            <header class="header">
+                <h1>Semantic Search GPT Regression Tool</h1>
+                <p>Test and analyze GPT responses for semantic search queries</p>
+            </header>
+            
+            <div class="tabs">
+                <div class="tab active" data-tab="single">Single Test</div>
+                <div class="tab" data-tab="batch">Batch Test</div>
+                <div class="tab" data-tab="finder">Finder Search</div>
+                <div class="tab" data-tab="config">Configuration</div>
             </div>
             
-            <!-- Right column - Results -->
-            <div class="column right-column">
-                <!-- Results section -->
-                <div class="results">
-                    <h2>Results</h2>
-                    <div id="results-container" class="hidden">
-                        <pre id="results-output"></pre>
-                    </div>
-                    <div id="placeholder-message" class="placeholder-message">
-                        <i class="fas fa-search"></i>
-                        <h3>No Results Yet</h3>
-                        <p>Enter a question and click the search button to see results here.</p>
-                    </div>
+            <div id="single-tab" class="tab-content active">
+                <div class="input-group">
+                    <label for="single-question">Question:</label>
+                    <textarea id="single-question" placeholder="Enter your question here..."></textarea>
                 </div>
+                <div class="input-group">
+                    <label for="iterations">Number of iterations:</label>
+                    <input type="number" id="iterations" value="1" min="1" max="10">
+                </div>
+                <button id="run-single" class="btn primary-button">Run Test</button>
+                <div id="single-status" class="status hidden"></div>
+            </div>
+            
+            <div id="batch-tab" class="tab-content">
+                <div class="input-group">
+                    <label for="batch-questions">Questions (one per line):</label>
+                    <textarea id="batch-questions" rows="10" placeholder="Enter your questions here, one per line..."></textarea>
+                </div>
+                <button id="run-batch" class="btn primary-button">Run Batch Test</button>
+                <div id="batch-status" class="status hidden"></div>
+            </div>
+            
+            <div id="finder-tab" class="tab-content">
+                <div class="input-group">
+                    <label for="finder-question">Question:</label>
+                    <textarea id="finder-question" placeholder="Enter your question here..."></textarea>
+                </div>
+                <button id="run-finder" class="btn primary-button">Run Finder Search</button>
+                <div id="finder-status" class="status hidden"></div>
+            </div>
+            
+            <div id="config-tab" class="tab-content">
+                <div class="input-group">
+                    <label for="api-key">OpenAI API Key:</label>
+                    <input type="password" id="api-key" placeholder="Enter your OpenAI API key">
+                </div>
+                <div class="input-group">
+                    <label for="configuration">Model Configuration (JSON):</label>
+                    <textarea id="configuration" rows="5" placeholder='{"model": "gpt-4o", "temperature": 0.7}'></textarea>
+                </div>
+                <button id="save-config" class="btn primary-button">Save Configuration</button>
+                <div id="config-status" class="status hidden"></div>
+            </div>
+            
+            <div id="chart-container" class="hidden">
+                <h3>Test Results</h3>
+                <canvas id="success-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="right-column">
+            <div id="results-container" class="hidden">
+                <div id="results-output"></div>
+            </div>
+            <div id="placeholder-message">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <h3>No Results Yet</h3>
+                <p>Enter a question and click the search button to see results here. Your search results will appear in this area once processed.</p>
             </div>
         </div>
     </div>
-
+    
     <script src="script.js"></script>
+    
+    <!-- Add dark mode toggle script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const themeToggle = document.getElementById('theme-toggle');
+            const moonIcon = document.getElementById('moon-icon');
+            const sunIcon = document.getElementById('sun-icon');
+            
+            // Check for saved theme preference or use preferred color scheme
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                moonIcon.style.display = 'none';
+                sunIcon.style.display = 'block';
+            } else if (savedTheme === 'light') {
+                document.body.classList.remove('dark-mode');
+                moonIcon.style.display = 'block';
+                sunIcon.style.display = 'none';
+            } else {
+                // If no saved preference, check system preference
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.body.classList.add('dark-mode');
+                    moonIcon.style.display = 'none';
+                    sunIcon.style.display = 'block';
+                }
+            }
+            
+            // Toggle theme when button is clicked
+            themeToggle.addEventListener('click', function() {
+                document.body.classList.toggle('dark-mode');
+                
+                if (document.body.classList.contains('dark-mode')) {
+                    localStorage.setItem('theme', 'dark');
+                    moonIcon.style.display = 'none';
+                    sunIcon.style.display = 'block';
+                } else {
+                    localStorage.setItem('theme', 'light');
+                    moonIcon.style.display = 'block';
+                    sunIcon.style.display = 'none';
+                }
+            });
+        });
+    </script>
 </body>
 </html> 
