@@ -443,6 +443,7 @@ When asked about investors, VCs, or investment firms, respond with:
 
 Search parameters may include:
 - investorType: The type of investor (e.g., "VC", "Angel", "Corporate")
+- searchname: Name of the investor or firm to search for
 - location: Geographic location(s)
 - investmentStage: Investment stages (e.g., "Seed", "Series A")
 - sectorFocus: Industry sectors of interest (e.g., "AI", "Climate Tech", "Fintech")
@@ -455,6 +456,13 @@ You:
   "investorType": "VC",
   "sectorFocus": "Artificial Intelligence",
   "investmentStage": "Series A"
+}
+
+Example:
+User: "Tell me about Sequoia Capital"
+You:
+{
+  "searchname": "Sequoia Capital"
 }`;
     }
     
@@ -1568,6 +1576,16 @@ You:
                 }
             }
             
+            // CHANGE: Use searchname instead of investorname
+            if (jsonResponse.investorname) {
+                params.append('searchname', jsonResponse.investorname);
+            }
+            
+            // Also check for direct searchname parameter
+            if (jsonResponse.searchname) {
+                params.append('searchname', jsonResponse.searchname);
+            }
+            
             if (jsonResponse.location) {
                 if (Array.isArray(jsonResponse.location)) {
                     jsonResponse.location.forEach(loc => {
@@ -1730,7 +1748,8 @@ You:
         const handledParams = ['investorType', 'location', 'investmentStage', 'sectorFocus', 
                               'sectorclassification', 'lowerFoundedYear', 'upperFoundedYear', 
                               'alltags', 'fundingstages', 'leadMin', 'investleadmin', 'sortBy',
-                              'description', 'unsupported', 'status', 'investsectors'];
+                              'description', 'unsupported', 'status', 'investsectors',
+                              'investorname', 'searchname']; // Added searchname to handled params
                               
         for (const [key, value] of Object.entries(jsonResponse)) {
             // Skip parameters we've already handled
