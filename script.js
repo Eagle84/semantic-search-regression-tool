@@ -333,6 +333,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Replace the original system prompt with the new UI
         systemPromptContainer.innerHTML = promptSelectionHTML;
         
+        // Add event listeners for prompt selection radio buttons
+        document.querySelectorAll('input[name="prompt-selection"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                localStorage.setItem('promptSelectionMode', getPromptSelectionMode());
+                console.log(`Prompt selection mode changed to: ${getPromptSelectionMode()}`);
+            });
+        });
+        
         // Add default prompts if empty
         setTimeout(() => {
             const startupPrompt = document.getElementById('startup-system-prompt');
@@ -1264,6 +1272,7 @@ You:
         try {
             // Determine prompt type (investor or startup) based on the question
             const promptType = determinePromptType(question);
+            console.log(`Using ${promptType} prompt type for finder search based on selection mode: ${getPromptSelectionMode()}`);
             
             // Get the appropriate system prompt based on the prompt type
             const systemPrompt = getFinderSystemPrompt(promptType);
@@ -1798,7 +1807,19 @@ You:
 
     // Function to determine the prompt type based on the question
     function determinePromptType(question) {
-        return isInvestorQuestion(question) ? 'investor' : 'startup';
+        const promptMode = getPromptSelectionMode();
+        
+        // If user has selected a specific prompt type, use that
+        if (promptMode === 'investor') {
+            console.log('Using investor prompt based on user selection');
+            return 'investor';
+        } else if (promptMode === 'startup') {
+            console.log('Using startup prompt based on user selection');
+            return 'startup';
+        } else {
+            // Auto-detect based on question content
+            return isInvestorQuestion(question) ? 'investor' : 'startup';
+        }
     }
 
     // Function to get the appropriate system prompt for finder searches
