@@ -1289,6 +1289,64 @@ You:
                             description += jsonResponse.unsupported ? `\n\nUnsupported fields: ${jsonResponse.unsupported}` : '';
                             delete jsonResponse.unsupported;
                         }
+                        
+                        // Pre-process the JSON response to map classification names to IDs
+                        if (promptType === 'investor' && jsonResponse.sectorFocus) {
+                            if (Array.isArray(jsonResponse.sectorFocus)) {
+                                jsonResponse.sectorFocus = jsonResponse.sectorFocus.map(sector => {
+                                    const sectorId = getClassificationId(sector);
+                                    console.log(`Mapped investor sector: "${sector}" -> "${sectorId}"`);
+                                    return sectorId;
+                                });
+                            } else {
+                                const sectorId = getClassificationId(jsonResponse.sectorFocus);
+                                console.log(`Mapped investor sector: "${jsonResponse.sectorFocus}" -> "${sectorId}"`);
+                                jsonResponse.sectorFocus = sectorId;
+                            }
+                        } else if (promptType === 'startup' && jsonResponse.sectorclassification) {
+                            if (Array.isArray(jsonResponse.sectorclassification)) {
+                                jsonResponse.sectorclassification = jsonResponse.sectorclassification.map(sector => {
+                                    const sectorId = getClassificationId(sector);
+                                    console.log(`Mapped startup sector: "${sector}" -> "${sectorId}"`);
+                                    return sectorId;
+                                });
+                            } else {
+                                const sectorId = getClassificationId(jsonResponse.sectorclassification);
+                                console.log(`Mapped startup sector: "${jsonResponse.sectorclassification}" -> "${sectorId}"`);
+                                jsonResponse.sectorclassification = sectorId;
+                            }
+                        }
+                        
+                        // Also map locations to IDs
+                        if (jsonResponse.location) {
+                            if (Array.isArray(jsonResponse.location)) {
+                                jsonResponse.location = jsonResponse.location.map(loc => {
+                                    const locationId = getLocationId(loc);
+                                    console.log(`Mapped location: "${loc}" -> "${locationId}"`);
+                                    return locationId;
+                                });
+                            } else {
+                                const locationId = getLocationId(jsonResponse.location);
+                                console.log(`Mapped location: "${jsonResponse.location}" -> "${locationId}"`);
+                                jsonResponse.location = locationId;
+                            }
+                        }
+                        
+                        // CRITICAL FIX: Map investsectors directly if present
+                        if (promptType === 'investor' && jsonResponse.investsectors) {
+                            if (Array.isArray(jsonResponse.investsectors)) {
+                                jsonResponse.investsectors = jsonResponse.investsectors.map(sector => {
+                                    const sectorId = getClassificationId(sector);
+                                    console.log(`Mapped investor investsectors: "${sector}" -> "${sectorId}"`);
+                                    return sectorId;
+                                });
+                            } else {
+                                const sectorId = getClassificationId(jsonResponse.investsectors);
+                                console.log(`Mapped investor investsectors: "${jsonResponse.investsectors}" -> "${sectorId}"`);
+                                jsonResponse.investsectors = sectorId;
+                            }
+                        }
+                        
                     } catch (e) {
                         showStatus('finder-status', 'Error parsing JSON from response', 'error');
                         return;
@@ -1304,9 +1362,13 @@ You:
             // Generate URL and fetch count
             showStatus('finder-status', '<div class="spinner"></div> Fetching results...', 'info');
             
+            // Generate the URL directly on the client side to ensure proper mapping
+            const generatedUrl = generateFinderUrlFromJsonResponse(jsonResponse, promptType);
+            console.log(`Generated URL: ${generatedUrl}`);
+            
             let serverResponse;
             try {
-                // Call the server API to generate URL and fetch count
+                // Call the server API with the pre-mapped JSON parameters
                 const response = await fetch('/api/finder-search', {
                     method: 'POST',
                     headers: {
@@ -1314,7 +1376,8 @@ You:
                     },
                     body: JSON.stringify({
                         jsonParams: jsonResponse,
-                        promptType: promptType
+                        promptType: promptType,
+                        clientGeneratedUrl: generatedUrl // Send the client-generated URL to the server
                     })
                 });
                 
@@ -1329,7 +1392,7 @@ You:
                 
                 // Create a basic totalCompaniesObj with error information
                 const totalCompaniesObj = {
-                    url: "Error generating URL",
+                    url: generatedUrl || "Error generating URL",
                     count: 0,
                     success: false,
                     error: error.message
@@ -1348,9 +1411,13 @@ You:
                 return;
             }
             
+            // Override the URL in the server response with our client-generated URL
+            // This ensures the correct IDs are used
+            serverResponse.generatedUrl = generatedUrl;
+            
             // Create a totalCompaniesObj from the server response
             const totalCompaniesObj = {
-                url: serverResponse.generatedUrl,
+                url: generatedUrl, // Use our client-generated URL
                 count: serverResponse.count || 0,
                 success: serverResponse.success,
                 elementText: serverResponse.elementText
@@ -1474,6 +1541,13 @@ You:
         // Create URL parameters
         const params = new URLSearchParams();
         
+        // Hardcoded mappings for specific classifications
+        const hardcodedClassifications = {
+            'Industrial Technologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
+            'Artificial Intelligence': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA',
+            'Financial Technology': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Pv6qoEKDA'
+        };
+        
         // Add parameters based on entity type
         if (promptType === 'investor') {
             // Process investor-specific parameters
@@ -1509,17 +1583,56 @@ You:
                 }
             }
             
-            if (jsonResponse.sectorFocus) {
-                if (Array.isArray(jsonResponse.sectorFocus)) {
-                    jsonResponse.sectorFocus.forEach(sector => {
-                        // Map sector name to ID
-                        const sectorId = getClassificationId(sector);
-                        params.append('investsectors', sectorId);
+            // CRITICAL FIX: Check for investsectors first (direct parameter)
+            if (jsonResponse.investsectors) {
+                if (Array.isArray(jsonResponse.investsectors)) {
+                    jsonResponse.investsectors.forEach(sector => {
+                        // The sector should already be an ID at this point, but double-check
+                        if (sector.startsWith('agxzfm')) {
+                            params.append('investsectors', sector);
+                        } else {
+                            // If somehow it's still a name, convert it
+                            const sectorId = getClassificationId(sector);
+                            console.log(`Final mapping for investsectors: "${sector}" -> "${sectorId}"`);
+                            params.append('investsectors', sectorId);
+                        }
                     });
                 } else {
-                    // Map sector name to ID
-                    const sectorId = getClassificationId(jsonResponse.sectorFocus);
-                    params.append('investsectors', sectorId);
+                    // The sector should already be an ID at this point, but double-check
+                    if (jsonResponse.investsectors.startsWith('agxzfm')) {
+                        params.append('investsectors', jsonResponse.investsectors);
+                    } else {
+                        // If somehow it's still a name, convert it
+                        const sectorId = getClassificationId(jsonResponse.investsectors);
+                        console.log(`Final mapping for investsectors: "${jsonResponse.investsectors}" -> "${sectorId}"`);
+                        params.append('investsectors', sectorId);
+                    }
+                }
+            }
+            // Then check for sectorFocus (which gets mapped to investsectors)
+            else if (jsonResponse.sectorFocus) {
+                if (Array.isArray(jsonResponse.sectorFocus)) {
+                    jsonResponse.sectorFocus.forEach(sector => {
+                        // The sector should already be an ID at this point, but double-check
+                        if (sector.startsWith('agxzfm')) {
+                            params.append('investsectors', sector);
+                        } else {
+                            // If somehow it's still a name, convert it
+                            const sectorId = getClassificationId(sector);
+                            console.log(`Final mapping for sectorFocus: "${sector}" -> "${sectorId}"`);
+                            params.append('investsectors', sectorId);
+                        }
+                    });
+                } else {
+                    // The sector should already be an ID at this point, but double-check
+                    if (jsonResponse.sectorFocus.startsWith('agxzfm')) {
+                        params.append('investsectors', jsonResponse.sectorFocus);
+                    } else {
+                        // If somehow it's still a name, convert it
+                        const sectorId = getClassificationId(jsonResponse.sectorFocus);
+                        console.log(`Final mapping for sectorFocus: "${jsonResponse.sectorFocus}" -> "${sectorId}"`);
+                        params.append('investsectors', sectorId);
+                    }
                 }
             }
         } else {
@@ -1527,14 +1640,26 @@ You:
             if (jsonResponse.sectorclassification) {
                 if (Array.isArray(jsonResponse.sectorclassification)) {
                     jsonResponse.sectorclassification.forEach(sector => {
-                        // Map sector name to ID
-                        const sectorId = getClassificationId(sector);
-                        params.append('sectorclassification', sectorId);
+                        // The sector should already be an ID at this point, but double-check
+                        if (sector.startsWith('agxzfm')) {
+                            params.append('sectorclassification', sector);
+                        } else {
+                            // If somehow it's still a name, convert it
+                            const sectorId = getClassificationId(sector);
+                            console.log(`Final mapping for sectorclassification: "${sector}" -> "${sectorId}"`);
+                            params.append('sectorclassification', sectorId);
+                        }
                     });
                 } else {
-                    // Map sector name to ID
-                    const sectorId = getClassificationId(jsonResponse.sectorclassification);
-                    params.append('sectorclassification', sectorId);
+                    // The sector should already be an ID at this point, but double-check
+                    if (jsonResponse.sectorclassification.startsWith('agxzfm')) {
+                        params.append('sectorclassification', jsonResponse.sectorclassification);
+                    } else {
+                        // If somehow it's still a name, convert it
+                        const sectorId = getClassificationId(jsonResponse.sectorclassification);
+                        console.log(`Final mapping for sectorclassification: "${jsonResponse.sectorclassification}" -> "${sectorId}"`);
+                        params.append('sectorclassification', sectorId);
+                    }
                 }
             }
             
@@ -1596,7 +1721,7 @@ You:
         const handledParams = ['investorType', 'location', 'investmentStage', 'sectorFocus', 
                               'sectorclassification', 'lowerFoundedYear', 'upperFoundedYear', 
                               'alltags', 'fundingstages', 'leadMin', 'investleadmin', 'sortBy',
-                              'description', 'unsupported', 'status'];
+                              'description', 'unsupported', 'status', 'investsectors'];
                               
         for (const [key, value] of Object.entries(jsonResponse)) {
             // Skip parameters we've already handled
@@ -1850,6 +1975,7 @@ You:
         try {
             const response = await fetch('classifications.csv');
             if (!response.ok) {
+                console.error('Failed to fetch classifications.csv:', response.status);
                 return;
             }
             
@@ -1858,6 +1984,7 @@ You:
             
             // Check if headers exist
             if (lines.length === 0) {
+                console.error('Classifications CSV is empty');
                 return;
             }
             
@@ -1867,50 +1994,191 @@ You:
             const nameIndex = headers.indexOf('name');
             
             if (idIndex === -1 || nameIndex === -1) {
+                console.error('Required columns not found in classifications CSV');
                 return;
             }
+            
+            // Clear existing mappings
+            classificationNameToIdMap = {};
             
             // Process each line
             for (let i = 1; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
                 
-                // Handle quoted CSV properly with regex
-                const matches = line.match(/"([^"]+)","([^"]+)"/);
+                let id, name;
                 
-                if (matches && matches.length >= 3) {
-                    const id = matches[1];
-                    const name = matches[2];
-                    
-                    if (id && name) {
-                        classificationNameToIdMap[name] = id;
-                    }
-                } else {
-                    // Fallback to simple split if regex fails
-                    const values = line.split(',').map(val => val.replace(/"/g, '').trim());
-                    
-                    if (values.length > Math.max(idIndex, nameIndex)) {
-                        const id = values[idIndex];
-                        const name = values[nameIndex];
-                        
-                        if (id && name) {
-                            classificationNameToIdMap[name] = id;
+                // Try to parse the CSV line properly
+                try {
+                    // Handle quoted CSV values
+                    if (line.startsWith('"')) {
+                        // Use regex to extract values between quotes
+                        const matches = line.match(/"([^"]+)","([^"]+)"/);
+                        if (matches && matches.length >= 3) {
+                            id = matches[1];
+                            name = matches[2];
+                        }
+                    } else {
+                        // Simple split for unquoted values
+                        const values = line.split(',');
+                        if (values.length > Math.max(idIndex, nameIndex)) {
+                            id = values[idIndex].trim();
+                            name = values[nameIndex].trim();
                         }
                     }
+                    
+                    if (id && name) {
+                        // Store the mapping with the original name
+                        classificationNameToIdMap[name] = id;
+                        
+                        // Also store lowercase version
+                        classificationNameToIdMap[name.toLowerCase()] = id;
+                        
+                        // Store version without spaces
+                        classificationNameToIdMap[name.replace(/\s+/g, '')] = id;
+                        classificationNameToIdMap[name.toLowerCase().replace(/\s+/g, '')] = id;
+                        
+                        // Store normalized version
+                        const normalizedName = normalizeClassificationName(name);
+                        if (!classificationNameToIdMap[normalizedName]) {
+                            classificationNameToIdMap[normalizedName] = id;
+                        }
+                    }
+                } catch (e) {
+                    console.error(`Error parsing line ${i}: ${line}`, e);
                 }
             }
             
-            // Create normalized index for better matching
-            classificationNameToIdMap._normalizedIndex = {};
-            for (const [key, value] of Object.entries(classificationNameToIdMap)) {
-                if (key === '_normalizedIndex') continue;
-                classificationNameToIdMap._normalizedIndex[normalizeClassificationName(key)] = value;
+            // Add common aliases manually
+            const aliases = {
+                'ai': 'Artificial Intelligence',
+                'artificial intelligence': 'Artificial Intelligence',
+                'fintech': 'Financial Technology',
+                'financial technology': 'Financial Technology',
+                'climate': 'Climate Tech',
+                'climate tech': 'Climate Tech',
+                'climatetech': 'Climate Tech',
+                'healthcare': 'Health Care',
+                'health care': 'Health Care',
+                'healthtech': 'Health Tech',
+                'health tech': 'Health Tech',
+                'edtech': 'Education Technology',
+                'education tech': 'Education Technology',
+                'education technology': 'Education Technology',
+                'industrial tech': 'Industrial Technologies',
+                'industrial technology': 'Industrial Technologies',
+                'industrialtech': 'Industrial Technologies',
+                'industrial': 'Industrial Technologies'
+            };
+            
+            // Add aliases to the mapping
+            for (const [alias, standardName] of Object.entries(aliases)) {
+                if (classificationNameToIdMap[standardName]) {
+                    classificationNameToIdMap[alias] = classificationNameToIdMap[standardName];
+                }
             }
+            
+            // Manually add specific mappings for problematic classifications
+            const manualMappings = {
+                'Industrial Technologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
+                'Artificial Intelligence': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Pv6qoEKDA',
+                'Financial Technology': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Pv6qoEKDA'
+            };
+            
+            // Add manual mappings
+            for (const [name, id] of Object.entries(manualMappings)) {
+                classificationNameToIdMap[name] = id;
+                classificationNameToIdMap[name.toLowerCase()] = id;
+                classificationNameToIdMap[name.replace(/\s+/g, '')] = id;
+                classificationNameToIdMap[name.toLowerCase().replace(/\s+/g, '')] = id;
+            }
+            
+            console.log(`Loaded ${Object.keys(classificationNameToIdMap).length} classification mappings`);
         } catch (error) {
-            // Error loading classifications
+            console.error('Error loading classifications:', error);
         }
     }
 
     // Call the classification loader when the document is ready
     loadClassifications();
+
+    // Function to get classification ID from name
+    function getClassificationId(classificationName) {
+        if (!classificationName) return classificationName;
+        
+        // Log the lookup attempt
+        console.log(`Looking up classification: "${classificationName}"`);
+        
+        // Direct mapping for critical classifications
+        const criticalMappings = {
+            'Industrial Technologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
+            'industrial technologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
+            'IndustrialTechnologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
+            'industrialtechnologies': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
+            'industrial tech': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
+            'Industrial Tech': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA',
+            'Artificial Intelligence': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA',
+            'artificial intelligence': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA',
+            'AI': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA',
+            'ai': 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA'
+        };
+        
+        // Check direct critical mappings first
+        if (criticalMappings[classificationName]) {
+            console.log(`Found direct critical mapping for "${classificationName}": ${criticalMappings[classificationName]}`);
+            return criticalMappings[classificationName];
+        }
+        
+        // Check for direct match with original name
+        if (classificationNameToIdMap[classificationName]) {
+            console.log(`Found direct match for "${classificationName}": ${classificationNameToIdMap[classificationName]}`);
+            return classificationNameToIdMap[classificationName];
+        }
+        
+        // Try case-insensitive lookup
+        const lowerName = classificationName.toLowerCase();
+        if (classificationNameToIdMap[lowerName]) {
+            console.log(`Found case-insensitive match for "${classificationName}": ${classificationNameToIdMap[lowerName]}`);
+            return classificationNameToIdMap[lowerName];
+        }
+        
+        // Try without spaces
+        const noSpaceName = classificationName.replace(/\s+/g, '');
+        if (classificationNameToIdMap[noSpaceName]) {
+            console.log(`Found no-space match for "${classificationName}": ${classificationNameToIdMap[noSpaceName]}`);
+            return classificationNameToIdMap[noSpaceName];
+        }
+        
+        // Try lowercase without spaces
+        const lowerNoSpaceName = lowerName.replace(/\s+/g, '');
+        if (classificationNameToIdMap[lowerNoSpaceName]) {
+            console.log(`Found lowercase no-space match for "${classificationName}": ${classificationNameToIdMap[lowerNoSpaceName]}`);
+            return classificationNameToIdMap[lowerNoSpaceName];
+        }
+        
+        // Try normalized name
+        const normalizedName = normalizeClassificationName(classificationName);
+        if (classificationNameToIdMap[normalizedName]) {
+            console.log(`Found normalized match for "${classificationName}": ${classificationNameToIdMap[normalizedName]}`);
+            return classificationNameToIdMap[normalizedName];
+        }
+        
+        // Handle special cases for Industrial Technologies
+        if (lowerName.includes('industrial') && (lowerName.includes('tech') || lowerName.includes('technolog'))) {
+            const industrialTechId = 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Puanf0LDA';
+            console.log(`Using hardcoded ID for Industrial Technologies: ${industrialTechId}`);
+            return industrialTechId;
+        }
+        
+        // Handle special cases for Artificial Intelligence
+        if (lowerName === 'ai' || (lowerName.includes('artificial') && lowerName.includes('intellig'))) {
+            const aiId = 'agxzfmlsbGlzdHNpdGVyJAsSF0Jhc2VDbGFzc2lmaWNhdGlvbk1vZGVsGICA4Lu1rJEIDA';
+            console.log(`Using hardcoded ID for Artificial Intelligence: ${aiId}`);
+            return aiId;
+        }
+        
+        // If no mapping found, log it and return the original
+        console.log(`No mapping found for classification: ${classificationName}`);
+        return classificationName;
+    }
 });
