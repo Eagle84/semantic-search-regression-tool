@@ -1,0 +1,44 @@
+CSV headers: country_id, country_name, district_id, district_name, sub_district_id, sub_district_name, city_id, city_name
+Indices - city name: 7, city ID: 6, country: 1, district: 3
+Location mappings loaded successfully
+Total mappings created: 6182
+Total normalized mappings: 6180
+
+Sample mappings:
+"Elifelet" -> "6L9Wg0SjxYCJ0VHHE2GddTO9rk3vwEorB3rIObsuIuNvZeVcRH0xXS"
+"Elifelet, Israel" -> "6L9Wg0SjxYCJ0VHHE2GddTO9rk3vwEorB3rIObsuIuNvZeVcRH0xXS"
+"Elifelet, North District, Israel" -> "6L9Wg0SjxYCJ0VHHE2GddTO9rk3vwEorB3rIObsuIuNvZeVcRH0xXS"
+"Givat Yeshayahu" -> "6tyySq6nl1mKvE1Kar5nJiRm5m0NrXz7Oz03RrEr5EeRIKP2DxZX9o"
+"Givat Yeshayahu, Israel" -> "6tyySq6nl1mKvE1Kar5nJiRm5m0NrXz7Oz03RrEr5EeRIKP2DxZX9o"
+
+Searching for Tel-Aviv-Yafo in mappings:
+Found 3 keys containing Tel Aviv:
+"Tel Aviv-Yafo" -> "agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+"Tel Aviv-Yafo, Israel" -> "agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+"Tel Aviv-Yafo, Center District, Israel" -> "agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+
+Testing getLocationId function:
+"Tel-Aviv-Yafo" -> "agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+"Tel Aviv-Yafo" -> "agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+"Tel Aviv Yafo" -> "agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+"London" -> "agxzfmlsbGlzdHNpdGVyZQsSB0dlb0NpdHkiWExvbmRvbl9fR3JlYXRlci1Mb25kb25fX0VuZ2xhbmRfX1VuaXRlZC1LaW5nZG9tX19FbmdsYW5kX19Vbml0ZWQtS2luZ2RvbV9fVW5pdGVkLUtpbmdkb20M"
+"New York" -> "agxzfmlsbGlzdHNpdGVyZwsSB0dlb0NpdHkiWk5ldy1Zb3JrX19OZXctWW9yay1Db3VudHlfX05ldy1Zb3JrX19Vbml0ZWQtU3RhdGVzX19OZXctWW9ya19fVW5pdGVkLVN0YXRlc19fVW5pdGVkLVN0YXRlcww"
+"Paris" -> "agxzfmlsbGlzdHNpdGVyXwsSB0dlb0NpdHkiUlBhcmlzX19BcnJvbmRpc3NlbWVudC1kZS1QYXJpc19fbGUtZGUtRnJhbmNlX19GcmFuY2VfX2xlLWRlLUZyYW5jZV9fRnJhbmNlX19GcmFuY2UM"
+
+Testing URL Generation:
+Location: "Tel-Aviv-Yafo"
+Mapped ID: "agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+Generated URL: "https://qatesting.findersnc.com/investors/search?location=agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+
+Location: "London"
+Mapped ID: "agxzfmlsbGlzdHNpdGVyZQsSB0dlb0NpdHkiWExvbmRvbl9fR3JlYXRlci1Mb25kb25fX0VuZ2xhbmRfX1VuaXRlZC1LaW5nZG9tX19FbmdsYW5kX19Vbml0ZWQtS2luZ2RvbV9fVW5pdGVkLUtpbmdkb20M"
+Generated URL: "https://qatesting.findersnc.com/investors/search?location=agxzfmlsbGlzdHNpdGVyZQsSB0dlb0NpdHkiWExvbmRvbl9fR3JlYXRlci1Mb25kb25fX0VuZ2xhbmRfX1VuaXRlZC1LaW5nZG9tX19FbmdsYW5kX19Vbml0ZWQtS2luZ2RvbV9fVW5pdGVkLUtpbmdkb20M"
+
+Location: "New York"
+Mapped ID: "agxzfmlsbGlzdHNpdGVyZwsSB0dlb0NpdHkiWk5ldy1Zb3JrX19OZXctWW9yay1Db3VudHlfX05ldy1Zb3JrX19Vbml0ZWQtU3RhdGVzX19OZXctWW9ya19fVW5pdGVkLVN0YXRlc19fVW5pdGVkLVN0YXRlcww"
+Generated URL: "https://qatesting.findersnc.com/investors/search?location=agxzfmlsbGlzdHNpdGVyZwsSB0dlb0NpdHkiWk5ldy1Zb3JrX19OZXctWW9yay1Db3VudHlfX05ldy1Zb3JrX19Vbml0ZWQtU3RhdGVzX19OZXctWW9ya19fVW5pdGVkLVN0YXRlc19fVW5pdGVkLVN0YXRlcww"
+
+
+Example from user query:
+Example URL: "https://qatesting.findersnc.com/investors/search?location=agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"
+Original example: "search?&location=agxzfmlsbGlzdHNpdGVyIgsSB0dlb0NpdHkiFVRlbC1Bdml2LVlhZm9fX0lzcmFlbAw"

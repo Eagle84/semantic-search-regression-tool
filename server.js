@@ -18,6 +18,99 @@ app.use(express.static('./'));
 // Parse JSON body
 app.use(express.json());
 
+// Global variable to store location mappings
+let locationNameToIdMap = {};
+
+// Function to normalize location names for better matching
+function normalizeLocationName(name) {
+    if (!name) return '';
+    
+    // Convert to lowercase
+    let normalized = name.toLowerCase();
+    
+    // Replace hyphens with spaces and vice versa for flexible matching
+    normalized = normalized.replace(/-/g, ' ').trim();
+    
+    return normalized;
+}
+
+// Function to load and parse locations.csv to create name to ID mapping
+async function loadLocationMappings() {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        // Read CSV file
+        const csvPath = path.join(__dirname, 'locations.csv');
+        const csvText = fs.readFileSync(csvPath, 'utf8');
+        
+        // Parse CSV
+        const lines = csvText.split('\n');
+        const headers = lines[0].split(',').map(header => header.replace(/"/g, '').trim());
+        
+        // Find indexes for city name and city ID columns
+        const cityNameIndex = headers.indexOf('city_name');
+        const cityIdIndex = headers.indexOf('city_id');
+        const countryNameIndex = headers.indexOf('country_name');
+        const districtNameIndex = headers.indexOf('district_name');
+        
+        // Process each line to create mappings
+        for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            
+            const values = lines[i].split(',').map(value => value.replace(/"/g, '').trim());
+            
+            if (values.length <= Math.max(cityNameIndex, cityIdIndex)) continue;
+            
+            const cityName = values[cityNameIndex];
+            const cityId = values[cityIdIndex];
+            const countryName = values[countryNameIndex];
+            const districtName = values[districtNameIndex];
+            
+            // Create composite keys for different location formats
+            // Store mappings for city name alone
+            locationNameToIdMap[cityName] = cityId;
+            
+            // Store mappings for "City, Country" format
+            locationNameToIdMap[`${cityName}, ${countryName}`] = cityId;
+            
+            // Store mappings for "City, District, Country" format
+            locationNameToIdMap[`${cityName}, ${districtName}, ${countryName}`] = cityId;
+        }
+        
+        // Create normalized index for better matching
+        locationNameToIdMap._normalizedIndex = {};
+        for (const [key, value] of Object.entries(locationNameToIdMap)) {
+            if (key === '_normalizedIndex') continue;
+            locationNameToIdMap._normalizedIndex[normalizeLocationName(key)] = value;
+        }
+        
+        console.log('Location mappings loaded successfully');
+    } catch (error) {
+        console.error('Error loading location mappings:', error);
+    }
+}
+
+// Function to get location ID from name, returns the original name if no mapping found
+function getLocationId(locationName) {
+    if (!locationName) return locationName;
+    
+    // Try to find exact match first
+    if (locationNameToIdMap[locationName]) {
+        return locationNameToIdMap[locationName];
+    }
+    
+    // If no exact match, try normalized comparison
+    const normalizedLocationName = normalizeLocationName(locationName);
+    if (locationNameToIdMap._normalizedIndex && locationNameToIdMap._normalizedIndex[normalizedLocationName]) {
+        return locationNameToIdMap._normalizedIndex[normalizedLocationName];
+    }
+    
+    // If still no match, log it and return the original
+    console.log(`No mapping found for location: ${locationName}`);
+    return locationName;
+}
+
 /**
  * Fetch company/investor count from a Finders URL
  */
@@ -164,7 +257,7 @@ function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') 
     // Default base URL for different entity types
     const baseUrl = promptType === 'investor' 
         ? 'https://qatesting.findersnc.com/investors/search'
-        : 'https://qatesting.findersnc.com/companies/search';
+        : 'https://qatesting.findersnc.com/startups/search';
     
     // Create URL parameters
     const params = new URLSearchParams();
@@ -182,9 +275,15 @@ function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') 
         
         if (jsonParams.location) {
             if (Array.isArray(jsonParams.location)) {
-                jsonParams.location.forEach(loc => params.append('location', loc));
+                jsonParams.location.forEach(loc => {
+                    // Map location name to ID
+                    const locationId = getLocationId(loc);
+                    params.append('location', locationId);
+                });
             } else {
-                params.append('location', jsonParams.location);
+                // Map location name to ID
+                const locationId = getLocationId(jsonParams.location);
+                params.append('location', locationId);
             }
         }
         
@@ -217,9 +316,15 @@ function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') 
         
         if (jsonParams.location) {
             if (Array.isArray(jsonParams.location)) {
-                jsonParams.location.forEach(loc => params.append('location', loc));
+                jsonParams.location.forEach(loc => {
+                    // Map location name to ID
+                    const locationId = getLocationId(loc);
+                    params.append('location', locationId);
+                });
             } else {
-                params.append('location', jsonParams.location);
+                // Map location name to ID
+                const locationId = getLocationId(jsonParams.location);
+                params.append('location', locationId);
             }
         }
         
@@ -283,7 +388,7 @@ function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') 
     
     // Construct the final URL
     const queryString = params.toString();
-    const finalUrl = queryString ? `${baseUrl}?${queryString}` : baseUrl;
+    const finalUrl = queryString ? `${baseUrl}?&${queryString}` : baseUrl;
     
     return finalUrl;
 }
@@ -321,6 +426,9 @@ app.get('/api/health-check', (req, res) => {
         message: 'Server is running'
     });
 });
+
+// Load location mappings at server startup
+loadLocationMappings();
 
 // Start the server
 app.listen(port, () => {
