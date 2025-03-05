@@ -71,11 +71,6 @@
                         </div>
                         
                         <div class="form-group">
-                            <label for="system-prompt">System Prompt</label>
-                            <textarea id="system-prompt" placeholder="You are a helpful assistant..." rows="3"></textarea>
-                        </div>
-                        
-                        <div class="form-group">
                             <label for="configuration">Configuration (JSON)</label>
                             <textarea id="configuration" placeholder="{...}" autocomplete="off" spellcheck="false" rows="8"></textarea>
                         </div>
@@ -86,21 +81,18 @@
                 </div>
             </div>
             
-            <!-- Right column - Results and Debug -->
+            <!-- Right column - Results -->
             <div class="column right-column">
                 <!-- Results section -->
-                <div class="card results-card">
+                <div class="results">
                     <h2>Results</h2>
-                    <div class="results">
-                        <pre id="results-output">Results will appear here...</pre>
+                    <div id="results-container" class="hidden">
+                        <pre id="results-output"></pre>
                     </div>
-                </div>
-                
-                <!-- Debug section -->
-                <div class="card debug-card">
-                    <h2>Debug Information</h2>
-                    <div class="debug">
-                        <pre id="debug-output">Debug information will appear here...</pre>
+                    <div id="placeholder-message" class="placeholder-message">
+                        <i class="fas fa-search"></i>
+                        <h3>No Results Yet</h3>
+                        <p>Enter a question and click the search button to see results here.</p>
                     </div>
                 </div>
             </div>

@@ -11,27 +11,36 @@ document.addEventListener('DOMContentLoaded', function() {
     // Global variable to store location mappings
     let locationNameToIdMap = {};
     
+    // Global variable to store classification mappings
+    let classificationNameToIdMap = {};
+    
     // Function to normalize location names for better matching
     function normalizeLocationName(name) {
         if (!name) return '';
         
-        // Convert to lowercase
-        let normalized = name.toLowerCase();
+        // Convert to lowercase, remove extra spaces, replace hyphens and underscores with spaces
+        return name.toLowerCase()
+            .trim()
+            .replace(/\s+/g, ' ')
+            .replace(/[-_]/g, ' ');
+    }
+    
+    // Function to normalize classification names for better matching
+    function normalizeClassificationName(name) {
+        if (!name) return '';
         
-        // Replace hyphens with spaces and vice versa for flexible matching
-        normalized = normalized.replace(/-/g, ' ').trim();
-        
-        return normalized;
+        // Convert to lowercase, remove extra spaces, replace hyphens and underscores with spaces
+        return name.toLowerCase()
+            .trim()
+            .replace(/\s+/g, ' ')
+            .replace(/[-_]/g, ' ');
     }
     
     // Function to ensure all tab content elements exist
     function ensureTabContentElements() {
-        console.log('Ensuring all tab content elements exist');
-        
         // Check if config tab exists
         let configTab = document.getElementById('config-tab');
         if (!configTab) {
-            console.log('Config tab not found, creating it');
             configTab = document.createElement('div');
             configTab.id = 'config-tab';
             configTab.className = 'tab-content';
@@ -61,7 +70,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const savedConfig = JSON.parse(localStorage.getItem('configuration'));
                     document.getElementById('configuration').value = JSON.stringify(savedConfig, null, 2);
                 } catch (e) {
-                    console.error('Failed to parse saved configuration:', e);
+                    // Failed to parse saved configuration
                 }
             }
             
@@ -93,7 +102,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if single tab exists
         let singleTab = document.getElementById('single-tab');
         if (!singleTab) {
-            console.log('Single tab not found, creating it');
             singleTab = document.createElement('div');
             singleTab.id = 'single-tab';
             singleTab.className = 'tab-content active';
@@ -103,7 +111,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if batch tab exists
         let batchTab = document.getElementById('batch-tab');
         if (!batchTab) {
-            console.log('Batch tab not found, creating it');
             batchTab = document.createElement('div');
             batchTab.id = 'batch-tab';
             batchTab.className = 'tab-content';
@@ -113,7 +120,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check if finder tab exists
         let finderTab = document.getElementById('finder-tab');
         if (!finderTab) {
-            console.log('Finder tab not found, creating it');
             finderTab = document.createElement('div');
             finderTab.id = 'finder-tab';
             finderTab.className = 'tab-content';
@@ -130,8 +136,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById(tabId)?.appendChild(statusElement);
             }
         });
-        
-        console.log('Tab content elements check complete');
     }
     
     // Ensure all tab content elements exist
@@ -457,150 +461,160 @@ You:
     // Function to display formatted results
     function displayFormattedResults(results, isBatch = false) {
         const resultsOutput = document.getElementById('results-output');
-        let formattedOutput = '';
+        const resultsContainer = document.getElementById('results-container');
+        const placeholder = document.getElementById('placeholder-message');
         
-        // Check if results is an array, if not convert it to an array for consistent handling
-        const resultsArray = Array.isArray(results) ? results : (results ? [results] : []);
-        
-        if (resultsArray.length === 0) {
-            resultsOutput.innerHTML = 'No results available.';
+        if (!resultsOutput || !resultsContainer || !placeholder) {
             return;
         }
         
-        // Update debug info only if we're displaying finder results
-        const activeTab = document.querySelector('.tab.active').getAttribute('data-tab');
-        if (activeTab === 'finder') {
-            updateDebugInfo(results);
+        // Show or hide the results and placeholder based on whether we have results
+        if (results && results.length > 0) {
+            resultsContainer.classList.remove('hidden');
+            placeholder.style.display = 'none';
         } else {
-            // Clear debug info for other tabs
-            document.getElementById('debug-output').innerHTML = '';
+            resultsContainer.classList.add('hidden');
+            placeholder.style.display = 'flex';
+            return; // No need to proceed further
         }
+        
+        // Format the results
+        let formattedResults = '';
+        
+        // Check if results is an array, if not convert it to an array for consistent handling
+        const resultsArray = Array.isArray(results) ? results : [results];
         
         resultsArray.forEach((result, index) => {
             // Format the output
-            formattedOutput += `<div class="result-item">`;
-            formattedOutput += `<h3>QUESTION ${index + 1}:</h3>`;
-            formattedOutput += `<p class="question-text">${result.question}</p>`;
+            formattedResults += `<div class="result-item">`;
             
-            // Add prompt type if available
+            // Add question and prompt type in a header section
+            formattedResults += `<div class="result-header">`;
+            formattedResults += `<h3>Question ${index + 1}</h3>`;
             if (result.promptType) {
-                formattedOutput += `<p><strong>PROMPT TYPE:</strong> ${result.promptType.charAt(0).toUpperCase() + result.promptType.slice(1)}</p>`;
+                const displayType = result.promptType.charAt(0).toUpperCase() + result.promptType.slice(1);
+                formattedResults += `<div class="prompt-type">${displayType}</div>`;
             }
+            formattedResults += `</div>`;
             
-            // Add description separately if available but don't include it in JSON
+            formattedResults += `<p class="question-text">${result.question}</p>`;
+            
+            // Add description separately if available
             if (result.description) {
-                formattedOutput += `<p><strong>DESCRIPTION:</strong><br>${result.description}</p>`;
+                formattedResults += `<div class="description"><strong>Description:</strong><br>${result.description}</div>`;
             }
             
-            // Add JSON response if available
+            // Format the JSON response
             if (result.jsonResponse) {
-                // Create a clean copy of the JSON without description and unsupported
-                const cleanJsonResponse = { ...result.jsonResponse };
-                delete cleanJsonResponse.description;
-                delete cleanJsonResponse.unsupported;
+                const cleanJsonResponse = {...result.jsonResponse};
                 
-                formattedOutput += `<div class="json-response"><strong>JSON RESPONSE:</strong><pre>${JSON.stringify(cleanJsonResponse, null, 2)}</pre></div>`;
+                // Remove description and unsupported if they were added separately
+                if (cleanJsonResponse.description) {
+                    delete cleanJsonResponse.description;
+                }
+                
+                if (cleanJsonResponse.unsupported) {
+                    delete cleanJsonResponse.unsupported;
+                }
+                
+                formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(cleanJsonResponse, null, 2)}</pre></div>`;
             } else if (result.response) {
                 // Try to extract JSON from the response if it's wrapped in markdown code blocks
-                let jsonData = null;
                 let rawResponse = result.response;
                 
                 if (typeof rawResponse === 'string') {
-                    // Try to extract JSON from markdown code blocks
+                    // Try to extract JSON if it's in code blocks
                     const jsonMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                    
                     if (jsonMatch && jsonMatch[1]) {
                         try {
-                            jsonData = JSON.parse(jsonMatch[1]);
+                            const jsonData = JSON.parse(jsonMatch[1]);
+                            const cleanJsonData = {...jsonData};
                             
                             // Extract description and unsupported if available to display separately
                             if (jsonData.description) {
-                                formattedOutput += `<p><strong>DESCRIPTION:</strong><br>${jsonData.description}</p>`;
+                                formattedResults += `<div class="description"><strong>Description:</strong><br>${jsonData.description}</div>`;
                             }
                             
                             if (jsonData.unsupported) {
-                                formattedOutput += `<p><strong>UNSUPPORTED:</strong><br>${jsonData.unsupported}</p>`;
+                                formattedResults += `<p><strong>Unsupported:</strong><br>${jsonData.unsupported}</p>`;
                             }
                             
-                            // Create a clean JSON object without description and unsupported
-                            const cleanJsonData = { ...jsonData };
-                            delete cleanJsonData.description;
-                            delete cleanJsonData.unsupported;
+                            // Remove them from the clean JSON
+                            if (cleanJsonData.description) {
+                                delete cleanJsonData.description;
+                            }
+                            
+                            if (cleanJsonData.unsupported) {
+                                delete cleanJsonData.unsupported;
+                            }
                             
                             // Add the clean JSON
-                            formattedOutput += `<div class="json-response"><strong>JSON RESPONSE:</strong><pre>${JSON.stringify(cleanJsonData, null, 2)}</pre></div>`;
+                            formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(cleanJsonData, null, 2)}</pre></div>`;
                         } catch (e) {
-                            console.warn('Could not parse JSON from response:', e);
-                            formattedOutput += `<p><strong>RESPONSE:</strong><br>${rawResponse}</p>`;
+                            formattedResults += `<p><strong>Response:</strong><br>${rawResponse}</p>`;
                         }
                     } else {
-                        formattedOutput += `<p><strong>RESPONSE:</strong><br>${rawResponse}</p>`;
+                        formattedResults += `<p><strong>Response:</strong><br>${rawResponse}</p>`;
                     }
                 } else if (typeof rawResponse === 'object') {
-                    // Create a clean copy of the object without description and unsupported
-                    const cleanResponse = { ...rawResponse };
-                    delete cleanResponse.description;
-                    delete cleanResponse.unsupported;
+                    // If response is already an object, format as JSON
+                    const cleanResponse = {...rawResponse};
                     
-                    formattedOutput += `<div class="json-response"><strong>JSON RESPONSE:</strong><pre>${JSON.stringify(cleanResponse, null, 2)}</pre></div>`;
+                    // Remove description and unsupported if they were added separately
+                    if (cleanResponse.description) {
+                        delete cleanResponse.description;
+                    }
+                    
+                    if (cleanResponse.unsupported) {
+                        delete cleanResponse.unsupported;
+                    }
+                    
+                    formattedResults += `<div class="json-response"><strong>JSON Response:</strong><pre>${JSON.stringify(cleanResponse, null, 2)}</pre></div>`;
                 }
             }
             
             // Add finder results if available
             if (result.finderUrl) {
-                formattedOutput += `<div class="finder-results">`;
-                formattedOutput += `<h4>FINDER RESULTS:</h4>`;
-                formattedOutput += `<p><strong>FINDER URL:</strong> <a href="${result.finderUrl}" target="_blank">${result.finderUrl}</a></p>`;
+                formattedResults += `<div class="finder-results">`;
+                formattedResults += `<h4>Finder Results</h4>`;
+                formattedResults += `<p><strong>Finder URL:</strong> <a href="${result.finderUrl}" target="_blank" rel="noopener noreferrer">${result.finderUrl}</a></p>`;
                 
                 if (result.totalCompanies !== undefined) {
-                    formattedOutput += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> ${result.totalCompanies}</p>`;
+                    formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> ${result.totalCompanies}</p>`;
                 } else if (result.retryAttempts && result.retryAttempts.length > 0) {
                     // If we have retry attempts with a successful one, use that count
                     const successfulAttempt = result.retryAttempts.find(attempt => attempt.result === "success");
                     if (successfulAttempt && successfulAttempt.count) {
-                        formattedOutput += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> ${successfulAttempt.count}</p>`;
+                        formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> ${successfulAttempt.count}</p>`;
                     } else {
-                        formattedOutput += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> Unknown (fetch failed)</p>`;
+                        formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> Unknown (fetch failed)</p>`;
                     }
                 } else {
-                    formattedOutput += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> Unknown</p>`;
+                    formattedResults += `<p><strong>Total ${result.entityType || 'Companies'}:</strong> Unknown</p>`;
                 }
                 
                 if (result.filterDescription) {
-                    formattedOutput += `<p><strong>FILTER DESCRIPTION:</strong><br>${result.filterDescription}</p>`;
+                    formattedResults += `<div class="filter-description"><strong>Filter Description:</strong><br>${result.filterDescription}</div>`;
                 }
                 
                 if (result.message) {
-                    formattedOutput += `<p class="result-message ${result.totalCompanies > 0 ? 'success' : 'warning'}">${result.message}</p>`;
+                    formattedResults += `<p class="result-message ${result.totalCompanies > 0 ? 'success' : 'warning'}">${result.message}</p>`;
                 }
                 
-                formattedOutput += `</div>`;
+                formattedResults += `</div>`;
             }
             
-            formattedOutput += `</div>`;
+            formattedResults += `</div>`;
             
             // Add separator between results
             if (index < resultsArray.length - 1) {
-                formattedOutput += `<hr class="result-separator">`;
+                formattedResults += `<hr class="result-separator">`;
             }
         });
         
-        // Add some CSS styles to make results more readable
-        formattedOutput = `
-            <style>
-                .result-item { margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px; }
-                .question-text { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
-                .json-response { margin: 10px 0; }
-                .json-response pre { background-color: #f1f1f1; padding: 10px; border-radius: 4px; overflow-x: auto; }
-                .finder-results { margin-top: 15px; padding: 15px; background-color: #e9ecef; border-radius: 5px; }
-                .result-separator { margin: 30px 0; border-top: 1px solid #dee2e6; }
-                .result-message { padding: 10px; border-radius: 4px; }
-                .result-message.success { background-color: #d4edda; color: #155724; }
-                .result-message.warning { background-color: #fff3cd; color: #856404; }
-            </style>
-        ` + formattedOutput;
-        
         // Use innerHTML to allow HTML elements like links and styling
-        resultsOutput.innerHTML = formattedOutput;
+        resultsOutput.innerHTML = formattedResults;
     }
     
     // Function to update the success rate chart
@@ -1170,9 +1184,6 @@ You:
         }
         
         try {
-            // Log the request for debugging
-            console.log("Making API request with config:", apiConfig);
-            
             // Make request to OpenAI API
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
@@ -1203,7 +1214,6 @@ You:
             
             return result;
         } catch (error) {
-            console.error("Error calling OpenAI API:", error);
             throw new Error(`Failed to get response from OpenAI: ${error.message}`);
         }
     }
@@ -1258,8 +1268,6 @@ You:
                 config
             );
             
-            console.log("OpenAI response for Finder:", result);
-            
             let jsonResponse = null;
             let description = '';
             
@@ -1282,7 +1290,6 @@ You:
                             delete jsonResponse.unsupported;
                         }
                     } catch (e) {
-                        console.warn('Could not parse JSON from response:', e);
                         showStatus('finder-status', 'Error parsing JSON from response', 'error');
                         return;
                     }
@@ -1294,25 +1301,8 @@ You:
                 return;
             }
             
-            // Debug information for the search parameters
-            if (jsonResponse) {
-                const debugInfo = {
-                    jsonParameters: jsonResponse,
-                    promptType: promptType
-                };
-                console.log("Debug info for Finder search:", debugInfo);
-                
-                // Add debug info to the status panel
-                const debugPanel = document.getElementById('finder-status');
-                if (debugPanel) {
-                    debugPanel.innerHTML += '<div class="debug-info"><pre>' + 
-                        JSON.stringify(debugInfo, null, 2) + 
-                        '</pre><hr></div>';
-                }
-            }
-            
-            // NEW: Use the server API to generate URL and fetch count in one step
-            showStatus('finder-status', '<div class="spinner"></div> Fetching results from server...', 'info');
+            // Generate URL and fetch count
+            showStatus('finder-status', '<div class="spinner"></div> Fetching results...', 'info');
             
             let serverResponse;
             try {
@@ -1334,18 +1324,7 @@ You:
                     throw new Error(serverResponse.error || 'Failed to fetch results from server');
                 }
                 
-                console.log("Server response:", serverResponse);
-                
-                // Update debug info with the generated URL
-                const debugPanel = document.getElementById('finder-status');
-                if (debugPanel) {
-                    debugPanel.innerHTML += '<div class="debug-info"><p>Generated URL: <a href="' + 
-                        serverResponse.generatedUrl + '" target="_blank">' + 
-                        serverResponse.generatedUrl + '</a></p><hr></div>';
-                }
-                
             } catch (error) {
-                console.error("Error calling server API:", error);
                 showStatus('finder-status', `Error calling server API: ${error.message}`, 'error');
                 
                 // Create a basic totalCompaniesObj with error information
@@ -1392,7 +1371,6 @@ You:
             
             showStatus('finder-status', 'Search completed successfully!', 'success');
         } catch (error) {
-            console.error("Error running finder search:", error);
             showStatus('finder-status', `Error: ${error.message}`, 'error');
         }
     }
@@ -1533,18 +1511,30 @@ You:
             
             if (jsonResponse.sectorFocus) {
                 if (Array.isArray(jsonResponse.sectorFocus)) {
-                    jsonResponse.sectorFocus.forEach(sector => params.append('sectorFocus', sector));
+                    jsonResponse.sectorFocus.forEach(sector => {
+                        // Map sector name to ID
+                        const sectorId = getClassificationId(sector);
+                        params.append('investsectors', sectorId);
+                    });
                 } else {
-                    params.append('sectorFocus', jsonResponse.sectorFocus);
+                    // Map sector name to ID
+                    const sectorId = getClassificationId(jsonResponse.sectorFocus);
+                    params.append('investsectors', sectorId);
                 }
             }
         } else {
             // Process startup-specific parameters
             if (jsonResponse.sectorclassification) {
                 if (Array.isArray(jsonResponse.sectorclassification)) {
-                    jsonResponse.sectorclassification.forEach(sector => params.append('sectorclassification', sector));
+                    jsonResponse.sectorclassification.forEach(sector => {
+                        // Map sector name to ID
+                        const sectorId = getClassificationId(sector);
+                        params.append('sectorclassification', sectorId);
+                    });
                 } else {
-                    params.append('sectorclassification', jsonResponse.sectorclassification);
+                    // Map sector name to ID
+                    const sectorId = getClassificationId(jsonResponse.sectorclassification);
+                    params.append('sectorclassification', sectorId);
                 }
             }
             
@@ -1613,8 +1603,6 @@ You:
             if (handledParams.includes(key)) {
                 continue;
             }
-            
-            console.log(`Adding additional parameter: ${key}=${value}`);
             
             if (Array.isArray(value)) {
                 value.forEach(item => params.append(key, item));
@@ -1856,4 +1844,73 @@ You:
 
     // Call the location mapping loader when the document is ready
     loadLocationMappings();
+
+    // Function to load classifications from CSV
+    async function loadClassifications() {
+        try {
+            const response = await fetch('classifications.csv');
+            if (!response.ok) {
+                return;
+            }
+            
+            const csvText = await response.text();
+            const lines = csvText.split('\n');
+            
+            // Check if headers exist
+            if (lines.length === 0) {
+                return;
+            }
+            
+            // Parse headers
+            const headers = lines[0].split(',').map(header => header.replace(/"/g, '').trim());
+            const idIndex = headers.indexOf('id');
+            const nameIndex = headers.indexOf('name');
+            
+            if (idIndex === -1 || nameIndex === -1) {
+                return;
+            }
+            
+            // Process each line
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                // Handle quoted CSV properly with regex
+                const matches = line.match(/"([^"]+)","([^"]+)"/);
+                
+                if (matches && matches.length >= 3) {
+                    const id = matches[1];
+                    const name = matches[2];
+                    
+                    if (id && name) {
+                        classificationNameToIdMap[name] = id;
+                    }
+                } else {
+                    // Fallback to simple split if regex fails
+                    const values = line.split(',').map(val => val.replace(/"/g, '').trim());
+                    
+                    if (values.length > Math.max(idIndex, nameIndex)) {
+                        const id = values[idIndex];
+                        const name = values[nameIndex];
+                        
+                        if (id && name) {
+                            classificationNameToIdMap[name] = id;
+                        }
+                    }
+                }
+            }
+            
+            // Create normalized index for better matching
+            classificationNameToIdMap._normalizedIndex = {};
+            for (const [key, value] of Object.entries(classificationNameToIdMap)) {
+                if (key === '_normalizedIndex') continue;
+                classificationNameToIdMap._normalizedIndex[normalizeClassificationName(key)] = value;
+            }
+        } catch (error) {
+            // Error loading classifications
+        }
+    }
+
+    // Call the classification loader when the document is ready
+    loadClassifications();
 });
