@@ -934,6 +934,24 @@ You:
                 params.append('searchname', jsonResponse.searchname);
             }
             
+            // Add fundingtype parameter
+            if (jsonResponse.fundingtype) {
+                if (Array.isArray(jsonResponse.fundingtype)) {
+                    jsonResponse.fundingtype.forEach(type => params.append('fundingtype', type));
+                } else {
+                    params.append('fundingtype', jsonResponse.fundingtype);
+                }
+            }
+            
+            // Add nationality parameter
+            if (jsonResponse.nationality) {
+                if (Array.isArray(jsonResponse.nationality)) {
+                    jsonResponse.nationality.forEach(nat => params.append('nationality', nat));
+                } else {
+                    params.append('nationality', jsonResponse.nationality);
+                }
+            }
+            
             if (jsonResponse.location) {
                 if (Array.isArray(jsonResponse.location)) {
                     jsonResponse.location.forEach(loc => {
@@ -950,11 +968,18 @@ You:
             
             if (jsonResponse.investmentStage) {
                 if (Array.isArray(jsonResponse.investmentStage)) {
-                    jsonResponse.investmentStage.forEach(stage => {
-                        params.append('investmentStage', formatInvestmentStage(stage));
-                    });
+                    jsonResponse.investmentStage.forEach(stage => params.append('investmentStage', formatInvestmentStage(stage)));
                 } else {
                     params.append('investmentStage', formatInvestmentStage(jsonResponse.investmentStage));
+                }
+            }
+            
+            // Add alltags parameter for investor searches
+            if (jsonResponse.alltags) {
+                if (Array.isArray(jsonResponse.alltags)) {
+                    jsonResponse.alltags.forEach(tag => params.append('alltags', tag));
+                } else {
+                    params.append('alltags', jsonResponse.alltags);
                 }
             }
             
@@ -1075,6 +1100,24 @@ You:
                     params.append('fundingstages', jsonResponse.fundingstages);
                 }
             }
+            
+            // Add fundingtype parameter for startups
+            if (jsonResponse.fundingtype) {
+                if (Array.isArray(jsonResponse.fundingtype)) {
+                    jsonResponse.fundingtype.forEach(type => params.append('fundingtype', type));
+                } else {
+                    params.append('fundingtype', jsonResponse.fundingtype);
+                }
+            }
+            
+            // Add nationality parameter for startups
+            if (jsonResponse.nationality) {
+                if (Array.isArray(jsonResponse.nationality)) {
+                    jsonResponse.nationality.forEach(nat => params.append('nationality', nat));
+                } else {
+                    params.append('nationality', jsonResponse.nationality);
+                }
+            }
         }
         
         // Add common parameters
@@ -1097,13 +1140,16 @@ You:
                               'sectorclassification', 'lowerFoundedYear', 'upperFoundedYear', 
                               'alltags', 'fundingstages', 'leadMin', 'investleadmin', 'sortBy',
                               'description', 'unsupported', 'status', 'investsectors',
-                              'investorname', 'searchname']; // Added searchname to handled params
+                              'investorname', 'searchname', 'fundingtype', 'nationality']; // Added fundingtype and nationality
                               
+        // Add any remaining parameters that weren't explicitly handled
         for (const [key, value] of Object.entries(jsonResponse)) {
             // Skip parameters we've already handled
-            if (handledParams.includes(key)) {
+            if (handledParams.includes(key.toLowerCase())) {
                 continue;
             }
+            
+            console.log(`Adding unhandled parameter: ${key}=${value}`);
             
             if (Array.isArray(value)) {
                 value.forEach(item => params.append(key, item));

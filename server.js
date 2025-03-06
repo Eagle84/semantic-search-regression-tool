@@ -135,14 +135,19 @@ async function fetchCompanyCount(url) {
         
         const html = await response.text();
         
-        // Extract the count from the HTML using regex
+        // Log the first 1000 characters of the HTML for debugging
+        console.log(`HTML response (first 1000 chars): ${html.substring(0, 1000)}`);
+        
+        // Try multiple patterns to extract the count
+        
+        // Pattern 1: Standard companiessummary-number span
         const countPattern = /<span id="companiessummary-number"[^>]*>([0-9,]+)<\/span>/;
         const match = html.match(countPattern);
         
         if (match && match[1]) {
             // Remove commas and convert to number
             const count = parseInt(match[1].replace(/,/g, ''), 10);
-            console.log(`Found count: ${count}`);
+            console.log(`Found count using pattern 1: ${count}`);
             
             return {
                 url: url,
@@ -152,13 +157,13 @@ async function fetchCompanyCount(url) {
             };
         }
         
-        // Try a more generic pattern if the first one didn't match
+        // Pattern 2: Generic pattern looking for numbers followed by "investors" or "companies"
         const genericPattern = /([0-9,]+)\s+(?:investors|companies)/i;
         const genericMatch = html.match(genericPattern);
         
         if (genericMatch && genericMatch[1]) {
             const count = parseInt(genericMatch[1].replace(/,/g, ''), 10);
-            console.log(`Found count using generic pattern: ${count}`);
+            console.log(`Found count using pattern 2: ${count}`);
             
             return {
                 url: url,
@@ -168,7 +173,34 @@ async function fetchCompanyCount(url) {
             };
         }
         
+        // Pattern 3: Look for any span with a number that might be the count
+        const spanNumberPattern = /<span[^>]*>([0-9,]+)<\/span>/g;
+        let spanMatches = [];
+        let spanMatch;
+        
+        while ((spanMatch = spanNumberPattern.exec(html)) !== null) {
+            spanMatches.push({
+                text: spanMatch[1],
+                count: parseInt(spanMatch[1].replace(/,/g, ''), 10)
+            });
+        }
+        
+        if (spanMatches.length > 0) {
+            // Sort by count value (descending) and take the first one
+            spanMatches.sort((a, b) => b.count - a.count);
+            const highestCount = spanMatches[0];
+            console.log(`Found count using pattern 3: ${highestCount.count}`);
+            
+            return {
+                url: url,
+                count: highestCount.count,
+                success: true,
+                elementText: highestCount.text
+            };
+        }
+        
         // If no count found
+        console.log("No count found in HTML");
         return {
             url: url,
             count: 0,
@@ -273,6 +305,33 @@ function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') 
             }
         }
         
+        // Add fundingtype parameter
+        if (jsonParams.fundingtype) {
+            if (Array.isArray(jsonParams.fundingtype)) {
+                jsonParams.fundingtype.forEach(type => params.append('fundingtype', type));
+            } else {
+                params.append('fundingtype', jsonParams.fundingtype);
+            }
+        }
+        
+        // Add nationality parameter
+        if (jsonParams.nationality) {
+            if (Array.isArray(jsonParams.nationality)) {
+                jsonParams.nationality.forEach(nat => params.append('nationality', nat));
+            } else {
+                params.append('nationality', jsonParams.nationality);
+            }
+        }
+        
+        // Add alltags parameter for investor searches
+        if (jsonParams.alltags) {
+            if (Array.isArray(jsonParams.alltags)) {
+                jsonParams.alltags.forEach(tag => params.append('alltags', tag));
+            } else {
+                params.append('alltags', jsonParams.alltags);
+            }
+        }
+        
         if (jsonParams.location) {
             if (Array.isArray(jsonParams.location)) {
                 jsonParams.location.forEach(loc => {
@@ -336,6 +395,24 @@ function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') 
             params.append('upperFoundedYear', jsonParams.upperFoundedYear);
         }
         
+        // Add fundingtype parameter for startups
+        if (jsonParams.fundingtype) {
+            if (Array.isArray(jsonParams.fundingtype)) {
+                jsonParams.fundingtype.forEach(type => params.append('fundingtype', type));
+            } else {
+                params.append('fundingtype', jsonParams.fundingtype);
+            }
+        }
+        
+        // Add nationality parameter for startups
+        if (jsonParams.nationality) {
+            if (Array.isArray(jsonParams.nationality)) {
+                jsonParams.nationality.forEach(nat => params.append('nationality', nat));
+            } else {
+                params.append('nationality', jsonParams.nationality);
+            }
+        }
+        
         if (jsonParams.alltags) {
             if (Array.isArray(jsonParams.alltags)) {
                 jsonParams.alltags.forEach(tag => params.append('alltags', tag));
@@ -371,13 +448,16 @@ function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') 
     const handledParams = ['investorType', 'location', 'investmentStage', 'sectorFocus', 
                           'sectorclassification', 'lowerFoundedYear', 'upperFoundedYear', 
                           'alltags', 'fundingstages', 'leadMin', 'investleadmin', 'sortBy',
-                          'description', 'unsupported', 'status'];
+                          'description', 'unsupported', 'status', 'fundingtype', 'nationality'];
                           
+    // Add any remaining parameters that weren't explicitly handled
     for (const [key, value] of Object.entries(jsonParams)) {
         // Skip parameters we've already handled
-        if (handledParams.includes(key)) {
+        if (handledParams.includes(key.toLowerCase())) {
             continue;
         }
+        
+        console.log(`Adding unhandled parameter: ${key}=${value}`);
         
         if (Array.isArray(value)) {
             value.forEach(item => params.append(key, item));
