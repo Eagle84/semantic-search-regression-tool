@@ -10,9 +10,8 @@ const requiredEnvVars = ['OPENAI_API_KEY'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
-    console.error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
-    console.error('Please copy .env.example to .env and configure the required values.');
-    process.exit(1);
+    const errorMessage = `Missing required environment variables: ${missingEnvVars.join(', ')}. Please copy .env.example to .env and configure the required values.`;
+    throw new Error(errorMessage);
 }
 
 module.exports = {

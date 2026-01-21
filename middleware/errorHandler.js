@@ -27,8 +27,10 @@ function errorHandler(err, req, res, next) {
     // Generic error message for client (prevent information disclosure)
     let clientMessage = 'An error occurred while processing your request.';
 
-    // In development, provide more details
-    if (config.server.nodeEnv === 'development') {
+    // Only provide details if explicitly in development mode (not just NODE_ENV check)
+    const isDebugMode = config.server.nodeEnv === 'development' && process.env.DEBUG_MODE === 'true';
+    
+    if (isDebugMode) {
         clientMessage = err.message || clientMessage;
     }
 
@@ -36,7 +38,7 @@ function errorHandler(err, req, res, next) {
     res.status(statusCode).json({
         success: false,
         error: clientMessage,
-        ...(config.server.nodeEnv === 'development' && { 
+        ...(isDebugMode && { 
             details: err.message,
             stack: err.stack 
         }),

@@ -87,16 +87,12 @@ async function fetchCompanyCount(url, timeout = config.request.timeoutMs) {
             }
             
             // Pattern 3: Look for any span with a number that might be the count
+            // Use matchAll for safer iteration (prevents infinite loops)
             const spanNumberPattern = /<span[^>]*>([0-9,]+)<\/span>/g;
-            let spanMatches = [];
-            let spanMatch;
-            
-            while ((spanMatch = spanNumberPattern.exec(safeHtml)) !== null) {
-                spanMatches.push({
-                    text: spanMatch[1],
-                    count: parseInt(spanMatch[1].replace(/,/g, ''), 10)
-                });
-            }
+            const spanMatches = Array.from(safeHtml.matchAll(spanNumberPattern)).map(match => ({
+                text: match[1],
+                count: parseInt(match[1].replace(/,/g, ''), 10)
+            }));
             
             if (spanMatches.length > 0) {
                 // Sort by count value (descending) and take the first one

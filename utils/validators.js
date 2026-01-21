@@ -4,6 +4,7 @@
  */
 
 const config = require('../config/config');
+const path = require('path'); // Move to top for better performance
 
 /**
  * Validate URL format and length
@@ -109,8 +110,6 @@ function isValidFilePath(filePath, baseDir) {
     if (!filePath || typeof filePath !== 'string') {
         return false;
     }
-
-    const path = require('path');
     
     // Resolve the absolute path
     const resolvedPath = path.resolve(baseDir, filePath);

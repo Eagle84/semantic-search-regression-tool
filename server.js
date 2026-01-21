@@ -10,11 +10,17 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
-// Load configuration
-const config = require('./config/config');
-const logger = require('./utils/logger');
-const { fetchCompanyCount } = require('./utils/fetchCount');
-const validators = require('./utils/validators');
+// Load configuration with error handling
+let config, logger, fetchCompanyCount, validators;
+try {
+    config = require('./config/config');
+    logger = require('./utils/logger');
+    ({ fetchCompanyCount } = require('./utils/fetchCount'));
+    validators = require('./utils/validators');
+} catch (error) {
+    console.error('Configuration error:', error.message);
+    process.exit(1);
+}
 
 // Import middleware
 const securityMiddleware = require('./middleware/security');
@@ -78,11 +84,13 @@ function normalizeLocationName(name) {
 // Function to load and parse locations.csv to create name to ID mapping
 async function loadLocationMappings() {
     try {
-        // Validate file path
-        const csvPath = path.join(__dirname, 'locations.csv');
+        // Validate file path before constructing full path
         if (!validators.isValidFilePath('locations.csv', __dirname)) {
             throw new Error('Invalid file path');
         }
+        
+        // Construct the full path after validation
+        const csvPath = path.join(__dirname, 'locations.csv');
         
         // Read CSV file
         const csvText = fs.readFileSync(csvPath, 'utf8');
