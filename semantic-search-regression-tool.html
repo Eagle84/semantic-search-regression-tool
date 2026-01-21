@@ -64,8 +64,10 @@
             
             <div id="config-tab" class="tab-content">
                 <div class="input-group">
-                    <label for="api-key">OpenAI API Key:</label>
-                    <input type="password" id="api-key" placeholder="Enter your OpenAI API key">
+                    <div style="padding: 15px; background-color: #e8f5e9; border: 1px solid #4caf50; border-radius: 4px; margin-bottom: 15px;">
+                        <strong>🔒 Security Note:</strong> API keys are now managed server-side for enhanced security. 
+                        Configure your OpenAI API key in the <code>.env</code> file on the server.
+                    </div>
                 </div>
                 <div class="input-group">
                     <label for="configuration">Model Configuration (JSON):</label>

@@ -1,22 +1,63 @@
 /**
- * Simple Express server to provide an API for fetching counts
- * This serves as a bridge between the browser UI and Finders API
+ * Express server with comprehensive security features
+ * Provides API for fetching counts and proxy for OpenAI API
  */
 
 const express = require('express');
 const fetch = require('node-fetch');
+const AbortController = require('abort-controller');
 const cors = require('cors');
-const app = express();
-const port = 3000;
+const fs = require('fs');
+const path = require('path');
 
-// Enable CORS for browser requests
-app.use(cors());
+// Load configuration
+const config = require('./config/config');
+const logger = require('./utils/logger');
+const { fetchCompanyCount } = require('./utils/fetchCount');
+const validators = require('./utils/validators');
+
+// Import middleware
+const securityMiddleware = require('./middleware/security');
+const { apiLimiter, openaiLimiter } = require('./middleware/rateLimiter');
+const { errorHandler, notFoundHandler, asyncHandler } = require('./middleware/errorHandler');
+
+const app = express();
+const port = config.server.port;
+
+// Security headers (must be first)
+app.use(securityMiddleware);
+
+// Configure CORS with specific origins
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) {
+            return callback(null, true);
+        }
+        
+        if (config.cors.allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            logger.security('CORS blocked origin', { origin });
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+};
+
+app.use(cors(corsOptions));
+
+// Parse JSON body with size limit
+app.use(express.json({ limit: '10kb' }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+    logger.request(req);
+    next();
+});
 
 // Serve static files from the current directory
 app.use(express.static('./'));
-
-// Parse JSON body
-app.use(express.json());
 
 // Global variable to store location mappings
 let locationNameToIdMap = {};
@@ -37,11 +78,13 @@ function normalizeLocationName(name) {
 // Function to load and parse locations.csv to create name to ID mapping
 async function loadLocationMappings() {
     try {
-        const fs = require('fs');
-        const path = require('path');
+        // Validate file path
+        const csvPath = path.join(__dirname, 'locations.csv');
+        if (!validators.isValidFilePath('locations.csv', __dirname)) {
+            throw new Error('Invalid file path');
+        }
         
         // Read CSV file
-        const csvPath = path.join(__dirname, 'locations.csv');
         const csvText = fs.readFileSync(csvPath, 'utf8');
         
         // Parse CSV
@@ -85,9 +128,9 @@ async function loadLocationMappings() {
             locationNameToIdMap._normalizedIndex[normalizeLocationName(key)] = value;
         }
         
-        console.log('Location mappings loaded successfully');
+        logger.info('Location mappings loaded successfully');
     } catch (error) {
-        console.error('Error loading location mappings:', error);
+        logger.error('Error loading location mappings:', error);
     }
 }
 
@@ -107,189 +150,191 @@ function getLocationId(locationName) {
     }
     
     // If still no match, log it and return the original
-    console.log(`No mapping found for location: ${locationName}`);
+    logger.debug(`No mapping found for location: ${locationName}`);
     return locationName;
 }
 
 /**
- * Fetch company/investor count from a Finders URL
+ * API endpoint to fetch company count with rate limiting and validation
  */
-async function fetchCompanyCount(url) {
-    try {
-        // Validate URL
-        if (!url) {
-            return {
-                success: false,
-                error: "Invalid URL provided"
-            };
+app.post('/api/fetch-count', apiLimiter, asyncHandler(async (req, res) => {
+    const { url } = req.body;
+    
+    // Validate URL
+    if (!url) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'URL is required' 
+        });
+    }
+    
+    if (!validators.isValidUrl(url)) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Invalid URL format' 
+        });
+    }
+    
+    const result = await fetchCompanyCount(url);
+    res.json(result);
+}));
+
+/**
+ * API endpoint to generate URL and fetch count in one step with validation
+ */
+app.post('/api/finder-search', apiLimiter, asyncHandler(async (req, res) => {
+    const { jsonParams, promptType } = req.body;
+    
+    // Validate jsonParams
+    if (!jsonParams) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'JSON parameters are required' 
+        });
+    }
+    
+    // Validate promptType
+    const validatedPromptType = promptType || 'investor';
+    if (!validators.isValidPromptType(validatedPromptType)) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Invalid prompt type' 
+        });
+    }
+    
+    // Generate URL from JSON parameters
+    const url = generateFinderUrlFromJsonResponse(jsonParams, validatedPromptType);
+    logger.info(`Generated URL: ${url}`);
+    
+    // Fetch count from the generated URL
+    const result = await fetchCompanyCount(url);
+    
+    // Add the generated URL to the result
+    result.generatedUrl = url;
+    result.jsonParams = jsonParams;
+    result.promptType = validatedPromptType;
+    
+    res.json(result);
+}));
+
+/**
+ * OpenAI API proxy endpoint - keeps API key server-side
+ * This endpoint accepts OpenAI chat completion requests and forwards them securely
+ */
+app.post('/api/openai/chat', openaiLimiter, asyncHandler(async (req, res) => {
+    const { messages, model, temperature, max_tokens, ...otherConfig } = req.body;
+    
+    // Validate required fields
+    if (!messages || !Array.isArray(messages)) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Messages array is required' 
+        });
+    }
+    
+    // Validate OpenAI configuration
+    const validation = validators.validateOpenAIConfig({ 
+        messages, 
+        model, 
+        temperature, 
+        max_tokens,
+        ...otherConfig 
+    });
+    
+    if (!validation.valid) {
+        return res.status(400).json({ 
+            success: false, 
+            error: validation.error 
+        });
+    }
+    
+    // Prepare API request
+    const apiConfig = {
+        model: model || 'gpt-4o',
+        messages: messages,
+        temperature: temperature !== undefined ? temperature : 0.7,
+        max_tokens: max_tokens || config.openai.maxTokens,
+    };
+    
+    // Add any other validated config parameters
+    for (const key in otherConfig) {
+        if (!apiConfig[key]) {
+            apiConfig[key] = otherConfig[key];
         }
+    }
+    
+    logger.info('OpenAI API request', { 
+        model: apiConfig.model, 
+        messageCount: messages.length 
+    });
+    
+    try {
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), config.openai.timeout);
         
-        console.log(`Server fetching count from: ${url}`);
+        // Make request to OpenAI API
+        const response = await fetch(config.openai.apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${config.openai.apiKey}`
+            },
+            body: JSON.stringify(apiConfig),
+            signal: controller.signal,
+        });
         
-        // Make a direct GET request
-        const response = await fetch(url);
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const html = await response.text();
-        
-        // Log the first 1000 characters of the HTML for debugging
-        console.log(`HTML response (first 1000 chars): ${html.substring(0, 1000)}`);
-        
-        // Try multiple patterns to extract the count
-        
-        // Pattern 1: Standard companiessummary-number span
-        const countPattern = /<span id="companiessummary-number"[^>]*>([0-9,]+)<\/span>/;
-        const match = html.match(countPattern);
-        
-        if (match && match[1]) {
-            // Remove commas and convert to number
-            const count = parseInt(match[1].replace(/,/g, ''), 10);
-            console.log(`Found count using pattern 1: ${count}`);
-            
-            return {
-                url: url,
-                count: count,
-                success: true,
-                elementText: match[1]
-            };
-        }
-        
-        // Pattern 2: Generic pattern looking for numbers followed by "investors" or "companies"
-        const genericPattern = /([0-9,]+)\s+(?:investors|companies)/i;
-        const genericMatch = html.match(genericPattern);
-        
-        if (genericMatch && genericMatch[1]) {
-            const count = parseInt(genericMatch[1].replace(/,/g, ''), 10);
-            console.log(`Found count using pattern 2: ${count}`);
-            
-            return {
-                url: url,
-                count: count,
-                success: true,
-                elementText: genericMatch[1]
-            };
-        }
-        
-        // Pattern 3: Look for any span with a number that might be the count
-        const spanNumberPattern = /<span[^>]*>([0-9,]+)<\/span>/g;
-        let spanMatches = [];
-        let spanMatch;
-        
-        while ((spanMatch = spanNumberPattern.exec(html)) !== null) {
-            spanMatches.push({
-                text: spanMatch[1],
-                count: parseInt(spanMatch[1].replace(/,/g, ''), 10)
+            const errorData = await response.json().catch(() => null);
+            logger.error('OpenAI API error', { 
+                status: response.status, 
+                error: errorData 
             });
+            throw new Error(`OpenAI API error: ${response.status}`);
         }
         
-        if (spanMatches.length > 0) {
-            // Sort by count value (descending) and take the first one
-            spanMatches.sort((a, b) => b.count - a.count);
-            const highestCount = spanMatches[0];
-            console.log(`Found count using pattern 3: ${highestCount.count}`);
-            
-            return {
-                url: url,
-                count: highestCount.count,
-                success: true,
-                elementText: highestCount.text
-            };
+        const data = await response.json();
+        
+        if (!data.choices || data.choices.length === 0) {
+            throw new Error("No response from OpenAI API");
         }
         
-        // If no count found
-        console.log("No count found in HTML");
-        return {
-            url: url,
-            count: 0,
-            success: false,
-            error: "Count element not found in HTML"
+        const result = {
+            content: data.choices[0].message.content,
+            usage: data.usage,
+            model: data.model,
+            finish_reason: data.choices[0].finish_reason
         };
         
-    } catch (error) {
-        console.error("Error fetching count:", error);
-        return {
-            url: url,
-            count: 0,
-            success: false,
-            error: error.message || 'Error fetching count'
-        };
-    }
-}
-
-/**
- * API endpoint to fetch company count
- */
-app.post('/api/fetch-count', async (req, res) => {
-    try {
-        const { url } = req.body;
-        
-        if (!url) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'URL is required' 
-            });
-        }
-        
-        const result = await fetchCompanyCount(url);
-        res.json(result);
-        
-    } catch (error) {
-        console.error('API error:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message || 'Internal server error' 
+        logger.info('OpenAI API response', { 
+            model: result.model, 
+            tokens: result.usage?.total_tokens 
         });
-    }
-});
-
-/**
- * API endpoint to generate URL and fetch count in one step
- */
-app.post('/api/finder-search', async (req, res) => {
-    try {
-        const { jsonParams, promptType } = req.body;
-        
-        if (!jsonParams) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'JSON parameters are required' 
-            });
-        }
-        
-        // Generate URL from JSON parameters
-        const url = generateFinderUrlFromJsonResponse(jsonParams, promptType || 'investor');
-        console.log(`Generated URL: ${url}`);
-        
-        // Fetch count from the generated URL
-        const result = await fetchCompanyCount(url);
-        
-        // Add the generated URL to the result
-        result.generatedUrl = url;
-        result.jsonParams = jsonParams;
-        result.promptType = promptType || 'investor';
         
         res.json(result);
         
     } catch (error) {
-        console.error('API error:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message || 'Internal server error' 
-        });
+        if (error.name === 'AbortError') {
+            logger.error('OpenAI API timeout');
+            return res.status(504).json({ 
+                success: false, 
+                error: 'Request timeout' 
+            });
+        }
+        throw error;
     }
-});
+}));
 
 /**
- * Generate Finder URL from JSON parameters (copied from browser code)
+ * Generate Finder URL from JSON parameters
  */
 function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') {
-    // Default base URL for different entity types
+    // Get base URL from configuration
     const baseUrl = promptType === 'investor' 
-        ? 'https://qatesting.findersnc.com/investors/search'
-        : 'https://qatesting.findersnc.com/startups/search';
+        ? config.finder.baseUrlInvestors
+        : config.finder.baseUrlStartups;
     
     // Create URL parameters
     const params = new URLSearchParams();
@@ -457,7 +502,7 @@ function generateFinderUrlFromJsonResponse(jsonParams, promptType = 'investor') 
             continue;
         }
         
-        console.log(`Adding unhandled parameter: ${key}=${value}`);
+        logger.debug(`Adding unhandled parameter: ${key}=${value}`);
         
         if (Array.isArray(value)) {
             value.forEach(item => params.append(key, item));
@@ -506,15 +551,23 @@ function formatInvestmentStage(stage) {
 app.get('/api/health-check', (req, res) => {
     res.json({ 
         status: 'ok',
-        message: 'Server is running'
+        message: 'Server is running',
+        timestamp: new Date().toISOString(),
     });
 });
+
+// 404 handler for undefined routes (must be after all routes)
+app.use(notFoundHandler);
+
+// Error handler (must be last)
+app.use(errorHandler);
 
 // Load location mappings at server startup
 loadLocationMappings();
 
 // Start the server
 app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-    console.log(`Open http://localhost:${port}/semantic-search-regression-tool.html to use the tool`);
+    logger.info(`Server running at http://localhost:${port}`);
+    logger.info(`Open http://localhost:${port}/semantic-search-regression-tool.html to use the tool`);
+    logger.info(`Environment: ${config.server.nodeEnv}`);
 }); 
