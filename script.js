@@ -108,11 +108,13 @@ document.addEventListener('DOMContentLoaded', function() {
             configTab.className = 'tab-content';
             document.querySelector('.container') || document.body.appendChild(configTab);
             
-            // Create basic structure for config tab - without the system prompt section
+            // Create basic structure for config tab - API key is now server-side
             configTab.innerHTML = `
                 <div class="input-group">
-                    <label for="api-key">OpenAI API Key:</label>
-                    <input type="password" id="api-key" placeholder="Enter your OpenAI API key">
+                    <div style="padding: 15px; background-color: #e8f5e9; border: 1px solid #4caf50; border-radius: 4px; margin-bottom: 15px;">
+                        <strong>🔒 Security Note:</strong> API keys are now managed server-side for enhanced security. 
+                        Configure your OpenAI API key in the <code>.env</code> file on the server.
+                    </div>
                 </div>
                 <div class="input-group">
                     <label for="configuration">Model Configuration (JSON):</label>
@@ -120,11 +122,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <button id="save-config" class="btn">Save Configuration</button>
             `;
-            
-            // Load saved API key if available
-            if (localStorage.getItem('apiKey')) {
-                document.getElementById('api-key').value = localStorage.getItem('apiKey');
-            }
             
             // Load saved configuration if available
             if (localStorage.getItem('configuration')) {
@@ -138,7 +135,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Add event listener for save button
             document.getElementById('save-config').addEventListener('click', function() {
-                const apiKey = document.getElementById('api-key').value;
                 const startupSystemPrompt = document.getElementById('startup-system-prompt')?.value || '';
                 const investorSystemPrompt = document.getElementById('investor-system-prompt')?.value || '';
                 const configStr = document.getElementById('configuration').value;
@@ -147,8 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Validate JSON
                     JSON.parse(configStr);
                     
-                    // Save to localStorage
-                    localStorage.setItem('apiKey', apiKey);
+                    // Save to localStorage (no API key)
                     localStorage.setItem('startupSystemPrompt', startupSystemPrompt);
                     localStorage.setItem('investorSystemPrompt', investorSystemPrompt);
                     localStorage.setItem('configuration', configStr);
@@ -194,12 +189,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Ensure all tab content elements exist
     ensureTabContentElements();
     
-    // Load saved values from localStorage if available
+    // API key is now managed server-side - remove old localStorage API key on load
     if (localStorage.getItem('apiKey')) {
-        const apiKeyInput = document.getElementById('api-key');
-        if (apiKeyInput) {
-            apiKeyInput.value = localStorage.getItem('apiKey');
-        }
+        localStorage.removeItem('apiKey');
+        console.log('Removed deprecated API key from localStorage - API keys are now managed server-side');
     }
     
     // Create startup and investor system prompts
@@ -276,8 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Save configuration
     document.getElementById('save-config').addEventListener('click', () => {
-        const apiKeyInput = document.getElementById('api-key');
-        const apiKey = apiKeyInput ? apiKeyInput.value : '';
+        // API key is now managed server-side - no need to save it
         
         const startupSystemPromptInput = document.getElementById('startup-system-prompt');
         const startupSystemPrompt = startupSystemPromptInput ? startupSystemPromptInput.value : '';
@@ -292,8 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Validate JSON
             JSON.parse(configStr);
             
-            // Save to localStorage
-            localStorage.setItem('apiKey', apiKey);
+            // Save to localStorage (no API key)
             localStorage.setItem('startupSystemPrompt', startupSystemPrompt);
             localStorage.setItem('investorSystemPrompt', investorSystemPrompt);
             localStorage.setItem('configuration', configStr);
@@ -527,13 +518,7 @@ You:
     
     // Function for running Finder searches
     async function runFinderSearch() {
-        const apiKeyInput = document.getElementById('api-key');
-        const apiKey = apiKeyInput ? apiKeyInput.value : '';
-        
-        if (!apiKey) {
-            showStatus('finder-status', 'Please enter your OpenAI API key in the Configuration tab', 'error');
-            return;
-        }
+        // API key is now managed server-side - no need to check it here
 
         // Check if server is running before proceeding
         try {
@@ -589,9 +574,9 @@ You:
             // Get the appropriate system prompt based on the prompt type
             const systemPrompt = getFinderSystemPrompt(promptType);
             
-            // Call OpenAI to get the JSON parameters
+            // Call OpenAI to get the JSON parameters (API key is managed server-side)
             const result = await runGptQuery(
-                apiKey,
+                null, // API key no longer needed - managed server-side
                 systemPrompt,
                 question,
                 config
@@ -1647,11 +1632,10 @@ You:
         statusElement.classList.remove('hidden');
     }
     
-    // Function for making API calls to OpenAI
+    // Function for making API calls to OpenAI through the server proxy
+    // NOTE: API key is no longer needed - it's managed server-side
     async function runGptQuery(apiKey, systemPrompt, question, config) {
-        if (!apiKey) {
-            throw new Error("API key is required");
-        }
+        // API key parameter is kept for backward compatibility but not used
         
         if (!question) {
             throw new Error("Question is required");
@@ -1688,12 +1672,11 @@ You:
         }
         
         try {
-            // Make request to OpenAI API
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            // Make request to server proxy endpoint (API key is handled server-side)
+            const response = await fetch('/api/openai/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
                 },
                 body: JSON.stringify(apiConfig)
             });
@@ -1705,15 +1688,16 @@ You:
             
             const data = await response.json();
             
-            if (!data.choices || data.choices.length === 0) {
-                throw new Error("No response from OpenAI API");
+            // Check if the response has the expected format
+            if (!data.content) {
+                throw new Error("No response content from OpenAI API");
             }
             
             const result = {
-                content: data.choices[0].message.content,
+                content: data.content,
                 usage: data.usage,
                 model: data.model,
-                finish_reason: data.choices[0].finish_reason
+                finish_reason: data.finish_reason
             };
             
             return result;
@@ -1738,13 +1722,7 @@ You:
 
     // Run single test
     document.getElementById('run-single').addEventListener('click', async () => {
-        const apiKeyInput = document.getElementById('api-key');
-        const apiKey = apiKeyInput ? apiKeyInput.value : '';
-        
-        if (!apiKey) {
-            showStatus('single-status', 'Please enter your OpenAI API key in the Configuration tab', 'error');
-            return;
-        }
+        // API key is now managed server-side
         
         const configTextarea = document.getElementById('configuration') || document.getElementById('config-textarea');
         const configStr = configTextarea ? configTextarea.value : '{}';
@@ -1775,7 +1753,7 @@ You:
                 const promptType = determinePromptType(question);
                 const systemPrompt = getSystemPromptForQuestion(question);
                 
-                const result = await runGptQuery(apiKey, systemPrompt, question, config);
+                const result = await runGptQuery(null, systemPrompt, question, config); // API key no longer needed
                 singleResults.push({
                     iteration: i + 1,
                     question,
