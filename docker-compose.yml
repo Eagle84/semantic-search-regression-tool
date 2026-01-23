@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  semantic-search-tool:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: semantic-search-regression-tool
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3000}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-900000}
+      - RATE_LIMIT_MAX_REQUESTS=${RATE_LIMIT_MAX_REQUESTS:-100}
+      - REQUEST_TIMEOUT_MS=${REQUEST_TIMEOUT_MS:-30000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_DIR=${LOG_DIR:-logs}
+      - FINDER_BASE_URL_INVESTORS=${FINDER_BASE_URL_INVESTORS:-https://qatesting.findersnc.com/investors/search}
+      - FINDER_BASE_URL_STARTUPS=${FINDER_BASE_URL_STARTUPS:-https://qatesting.findersnc.com/startups/search}
+    volumes:
+      - logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health-check', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+volumes:
+  logs:
