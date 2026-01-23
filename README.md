@@ -29,6 +29,8 @@ A secure, web-based tool for testing and evaluating GPT model responses to seman
 - An OpenAI API key
 - A modern web browser
 
+**Alternative**: You can also run this application using Docker. See [DOCKER.md](DOCKER.md) for Docker deployment instructions.
+
 ### Installation
 
 1. Clone this repository:
@@ -64,6 +66,27 @@ A secure, web-based tool for testing and evaluating GPT model responses to seman
    ```
    http://localhost:3000/semantic-search-regression-tool.html
    ```
+
+### Docker Installation (Alternative)
+
+If you prefer to use Docker:
+
+1. Clone this repository and configure environment:
+   ```bash
+   git clone https://github.com/Eagle84/semantic-search-regression-tool.git
+   cd semantic-search-regression-tool
+   cp .env.example .env
+   # Edit .env and set your OPENAI_API_KEY
+   ```
+
+2. Start with Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+3. Access at: `http://localhost:3000/semantic-search-regression-tool.html`
+
+See [DOCKER.md](DOCKER.md) for complete Docker deployment guide.
 
 ### First-Time Setup
 
