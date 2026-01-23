@@ -35,9 +35,9 @@ USER nodejs
 # Expose the default port (can be overridden by environment variable)
 EXPOSE 3000
 
-# Health check
+# Health check using dedicated script
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/health-check', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD sh /app/healthcheck.sh
 
 # Start the server
 CMD ["node", "server.js"]

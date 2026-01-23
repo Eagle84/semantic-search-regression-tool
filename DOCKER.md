@@ -109,7 +109,7 @@ The Docker image uses:
 - **Base Image**: `node:18-alpine` (lightweight Alpine Linux with Node.js 18 LTS)
 - **Multi-stage Build**: Optimizes image size by separating build and runtime stages
 - **Non-root User**: Runs as user `nodejs` for security
-- **Health Check**: Built-in health check using `/api/health-check` endpoint
+- **Health Check**: Built-in health check using dedicated script (`healthcheck.sh`) that queries `/api/health-check` endpoint
 - **Port**: Exposes port 3000 (configurable via `PORT` environment variable)
 
 ## Security Considerations
