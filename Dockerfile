@@ -23,7 +23,7 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copy dependencies from builder stage
 COPY --from=builder /app/node_modules ./node_modules
 
-# Copy application files
+# Copy application files (sensitive files excluded via .dockerignore)
 COPY --chown=nodejs:nodejs . .
 
 # Create logs directory with proper permissions
